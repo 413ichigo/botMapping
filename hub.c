@@ -10,7 +10,7 @@ int pathfind(); //A* or djikstra, generates instruction sets in "action" and "ar
 int speak(int room);  //the feature of the current square is passed and the appropriate speach is found
 
 
-double [2][419][10] sweep; //up to ten rotations
+double sweep[2][419][10]; //up to ten rotations
 int field[30][30];    //map generated from mapGen
 int x;  //current X position
 int y;  //current Y position
@@ -27,10 +27,10 @@ double arg[5];  //list of arguments to be sent to movement
 int main(int argc, char const *argv[]) {
 
   //initialize hardware components
-  printf("initializing hardware..\n", );
+  printf("initializing hardware..\n");
 
   if(sysInit() == 1){
-    printf("I didnt even fuckin start\n", );
+    printf("I didnt even fuckin start\n");
     return 1;
   }
 
@@ -38,7 +38,7 @@ int main(int argc, char const *argv[]) {
 
   printf("Testing motors..\n");
   if((movement(1,1) == 1) && (movement(1,-1) == 1)){ //move forward and back
-    printf("I'm a dumb robot and i cant move\n", );
+    printf("I'm a dumb robot and i cant move\n");
     return 1;
   }
   printf("Moved successfully!!\n");
@@ -50,7 +50,7 @@ int main(int argc, char const *argv[]) {
     return 1;
   }
   if(mapGen() == 1){
-    printf("Location not found!\n", );
+    printf("Location not found!\n");
     return 1;
   }
 
@@ -58,7 +58,7 @@ int main(int argc, char const *argv[]) {
 
 
   //loop
-  while(){
+  while(1){
     printf("Finding next waypoint..\n");
     if(findNext() == 1){
       printf("There is not a waypoint in driving distance that I have not visited!!\n");
@@ -186,7 +186,7 @@ int findNext(){  //finds X and Y positions of the next nearest unvisited destina
 //          between the current position and the next one
 //
 /////////////////////////////////////////////////////////////////////////////////
-int pathfind()[ //A* or djikstra, generates instruction sets in "action" and "argument"
+int pathfind(){
 
   return 0;
 }
