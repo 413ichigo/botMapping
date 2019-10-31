@@ -1,6 +1,8 @@
 #include "my.h"
 
-int sysInit();
+
+//overhead functions
+int sysInit();  //initialzes all hardware items and loads map from .bMap file
 int movement(int act, double arg); //act 0: rotate, act 1: forward, arg:dist/deg
 int scan(int rotations); //tells lidar to scan and reads the data into "sweep"
 int mapGen();   //generates map (fuck you reid), JK, generates "field" from "sweep"
@@ -10,11 +12,15 @@ int pathfind(); //A* or djikstra, generates instruction sets in "action" and "ar
 int speak(int room);  //the feature of the current square is passed and the appropriate speach is found
 
 
+//map functions
+int printMap(struct square[110][45]);
+
+
 double sweep[2][419][10]; //up to ten rotations
 int field[30][30];    //map generated from mapGen
 int x;  //current X position
 int y;  //current Y position
-int dest;
+int dest; //feature number destination
 double angle; //current angle away from wall.
 int nextX;  //destination X
 int nextY;  //destination Y
@@ -23,6 +29,21 @@ double nextDist;
 int action[5];  //list of actions to be sent to movement
 double arg[5];  //list of arguments to be sent to movement
 
+
+//map variables
+int squareCount = 0;
+char mapin [MAXPATHLEN] = "mapEdit1.bMap";
+char mapout [MAXPATHLEN] = "mapEdit1.bMap";
+struct square squareList [4725];
+struct square squareGraph[110][45];
+int height = 45;
+int width = 110;
+int features [3][10]; //features are stored with feature num, X, and Y
+int featureNum = 0;
+int homeX = 0;
+int homeY = 0;
+struct Queue* Xqueue;
+struct Queue* Yqueue;
 
 int main(int argc, char const *argv[]) {
 
@@ -81,6 +102,7 @@ int main(int argc, char const *argv[]) {
     scan(5);
     mapGen();
     localize();
+    return 1;
   }
   return 0;
 }
@@ -94,12 +116,77 @@ int main(int argc, char const *argv[]) {
 int sysInit(){
 
   //nathan put your lidar initializing shit in here
+  
 
+  //map stuff
+
+  FILE* fp = fopen(mapin,"r");    //originally fp = fopen(in->paths[k],"r"); opens the path at "path" for read
+  char* line = NULL;
+  size_t len = 0;
+  int length = 0;
+
+  if(fp == NULL){
+       printf(ANSI_COLOR_RED"I'm afraid I can't let you do that, Dave"ANSI_COLOR_RESET"\n");
+       printf("That file name must be incorrect or something. Try a .bMap file with the correct format.\n");
+       return -1;
+  }
+
+  while ((length=getline(&line, &len, fp)) != -1) {
+
+       char* token = "initializer";
+       struct square curSquare;
+       int j = 0;
+       while (token) {
+            if(j == 0){
+                 token = strtok(line,",\n");
+                 //strcpy(curInstr.name, token);
+                 curSquare.x = atoi(token);
+                 printf("%d ", atoi(token));
+                 j++;
+            }else if(j == 1){
+                 //strcpy(curInstr.arg1, token);
+                 curSquare.y = atoi(token);
+                 printf("%d ", atoi(token));
+                 j++;
+            }else if(j == 2){
+                 //strcpy(curInstr.arg1, token);
+                 curSquare.weight = atoi(token);
+                 printf("%d ", atoi(token));
+                 j++;
+            }else{
+                 curSquare.feature = atoi(token);
+                 printf("%d \n", atoi(token));
+                 break;
+            }
+            token = strtok(NULL, ",\n");
+       }
+       squareList[squareCount] = curSquare;
+       squareGraph[curSquare.x][curSquare.y] = curSquare;
+
+       //if location feature, add to location list
+       if(curSquare.feature > 100){
+
+            features[1][featureNum] = curSquare.x;
+            enqueue(Xqueue, curSquare.x);
+            features[2][featureNum] = curSquare.y;
+            enqueue(Yqueue, curSquare.y);
+            features[3][featureNum] = curSquare.feature;
+            featureNum = featureNum + 1;
+
+       }
+
+       //if 0, add home
+
+       squareCount++;
+  }
+
+  printMap(squareGraph);
   return 0;
 }
 
 
 //////////////////////end sysInit()
+
 
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -126,6 +213,7 @@ int movement(int act, double arg){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int scan(int rotations){
+
     return 0;
 }
 
@@ -204,4 +292,26 @@ int pathfind(){
 /////////////////////////////////////////////////////////////////////////////////
 int speak(int room){
   return 0;
+}
+
+
+
+int printMap(struct square map [110][45]){
+
+     for(int i = height-1; i >= 0; i--){
+          for(int j = 0; j < width; j++){
+            if(map[j][i].weight != 0){
+              printf(ANSI_COLOR_RED"%d "ANSI_COLOR_RESET, map[j][i].weight);
+            }else if(map[j][i].feature == 100){
+              printf(ANSI_COLOR_GREEN"%d "ANSI_COLOR_RESET, map[j][i].weight);
+            }else if(map[j][i].feature > 100){
+              printf(ANSI_COLOR_CYAN"%d "ANSI_COLOR_RESET, map[j][i].weight);
+            }else{
+              printf("%d ", map[j][i].weight);
+            }
+          }
+          printf("\n");
+     }
+
+     return 0;
 }

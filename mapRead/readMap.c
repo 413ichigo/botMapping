@@ -10,7 +10,7 @@ int sweep(int x, int y, int quad, int delX, int delY, int weight);
 
 //global variables
 int squareCount = 0;
-char mapLoc [MAXPATHLEN] = "hallwayTest.bMap";
+char mapin [MAXPATHLEN] = "hallwayTest.bMap";
 char mapout [MAXPATHLEN] = "mapEdit1.bMap";
 struct square squareList [4725];
 struct square squareGraph[110][45];
@@ -29,7 +29,7 @@ int main(int argc, char const *argv[]) {
      Yqueue = createQueue(1000);
 
      //first, open the map and read the contents into a list.
-     if(readMap(mapLoc) == -1){
+     if(readMap(mapin) == -1){
           exit(1); //check if valid? maybe ask for user intervention at this point
      }
      //at this point, we have all the map, the square list and the feature list
@@ -44,11 +44,11 @@ int main(int argc, char const *argv[]) {
      sweep(25,20,1, 80, 5, 1);
      sweep(30,20, 1, 75, 23, 1);
      sweep(105,0, 1, 5, 45, 1);
-     editFeature(94, 10, 100);
-     editFeature(71, 17, 202);
-     editFeature(58, 17, 203);
-     editFeature(49, 17, 204);
-     editFeature(43, 17, 205);
+     //editFeature(94, 10, 100);
+     //editFeature(71, 17, 202);
+     //editFeature(58, 17, 203);
+     //editFeature(49, 17, 204);
+     //editFeature(43, 17, 205);
 
 
      //edit check
