@@ -1,4 +1,5 @@
 #include "my.h"
+#include "sdk/sdk/include/rplidar.h" //RPLIDAR standard sdk, all-in-one header
 
 
 //overhead functions
