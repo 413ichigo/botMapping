@@ -4,7 +4,7 @@
 
 //overhead functions
 int sysInit();  //initialzes all hardware items and loads map from .bMap file
-int movement(int act, double arg); //act 0: rotate, act 1: forward, arg:dist/deg
+int move(int act, double arg); //act 0: rotate, act 1: forward, arg:dist/deg
 int scan(int rotations); //tells lidar to scan and reads the data into "sweep"
 int mapGen();   //generates map (fuck you reid), JK, generates "field" from "sweep"
 int localize(); //compares X and Y of current location as well as angle from wall to one in memory
@@ -27,8 +27,8 @@ int nextX;  //destination X
 int nextY;  //destination Y
 double nextAngle;
 double nextDist;
-int action[5];  //list of actions to be sent to movement
-double arg[5];  //list of arguments to be sent to movement
+int action[5];  //list of actions to be sent to move
+double arg[5];  //list of arguments to be sent to move
 
 
 //map variables
@@ -59,7 +59,7 @@ int main(int argc, char const *argv[]) {
   printf("Hardware initialized successfully!!\n");
 
   printf("Testing motors..\n");
-  if((movement(1,1) == 1) && (movement(1,-1) == 1)){ //move forward and back
+  if((move(1,1) == 1) && (move(1,-1) == 1)){ //move forward and back
     printf("I'm a dumb robot and i cant move\n");
     return 1;
   }
@@ -89,8 +89,8 @@ int main(int argc, char const *argv[]) {
     printf("Found one! It is at %d, %d and is room %d\n", nextX, nextY, dest);
     while((x!=nextX) && (y != nextY)){
       pathfind(); //finds nextAngle and nextDist, a fraction of the total distance traveled
-      movement(1, nextAngle);
-      movement(0, nextDist);
+      move(1, nextAngle);
+      move(0, nextDist);
 
       //position checking
       scan(5);
@@ -191,19 +191,19 @@ int sysInit(){
 
 
 /////////////////////////////////////////////////////////////////////////////////
-// METHOD movement  /////////////////////////////////////////////////////////////
+// METHOD move  /////////////////////////////////////////////////////////////
 // input: integer action- 0: move forward or backward, 1: rotate right or left
 //        double argument- cast to int if action is 0, distance or angle measure
 // output: error codes if they exist. May return motor feedback
 //
 /////////////////////////////////////////////////////////////////////////////////
-int movement(int act, double arg){
+int move(int act, double arg){
 
   return 0;
 }
 
 
-/////////////////////end movement()
+/////////////////////end move()
 
 
 
