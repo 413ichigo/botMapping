@@ -126,7 +126,7 @@ int sysInit(){
   int length = 0;
 
   if(fp == NULL){
-       printf(ANSI_COLOR_RED"I'm afraid I can't let you do that, Dave"ANSI_COLOR_RESET"\n");
+       printf(ANSI_COLOR_RED "I'm afraid I can't let you do that, Dave" ANSI_COLOR_RESET "\n");
        printf("That file name must be incorrect or something. Try a .bMap file with the correct format.\n");
        return -1;
   }
@@ -303,11 +303,11 @@ int printMap(struct square map [155][300]){
      for(int i = height-1; i >= 0; i--){
           for(int j = 0; j < width; j++){
             if(map[j][i].weight != 0){
-              printf(ANSI_COLOR_RED"%d "ANSI_COLOR_RESET, map[j][i].weight);
+              printf(ANSI_COLOR_RED "%d " ANSI_COLOR_RESET, map[j][i].weight);
             }else if(map[j][i].feature == 100){
-              printf(ANSI_COLOR_GREEN"%d "ANSI_COLOR_RESET, map[j][i].weight);
+              printf(ANSI_COLOR_GREEN "%d " ANSI_COLOR_RESET, map[j][i].weight);
             }else if(map[j][i].feature > 100){
-              printf(ANSI_COLOR_CYAN"%d "ANSI_COLOR_RESET, map[j][i].weight);
+              printf(ANSI_COLOR_CYAN "%d " ANSI_COLOR_RESET, map[j][i].weight);
             }else{
               printf("%d ", map[j][i].weight);
             }

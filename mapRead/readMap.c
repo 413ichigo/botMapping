@@ -2,8 +2,8 @@
 
 //method headers
 int readMap(char*);
-int printMap(struct square[110][45]);
-int writeBack(struct square[110][45]);
+int printMap(struct square[155][300]);
+int writeBack(struct square[155][300]);
 int editFeature(int x, int y, int featureNum);
 int swath(int x, int y, int dir, int distance, int weight);
 int sweep(int x, int y, int quad, int delX, int delY, int weight);
@@ -11,11 +11,11 @@ int sweep(int x, int y, int quad, int delX, int delY, int weight);
 //global variables
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "hallwayTest.bMap";
-char mapout [MAXPATHLEN] = "mapEdit1.bMap";
-struct square squareList [4725];
-struct square squareGraph[110][45];
-int height = 45;
-int width = 110;
+char mapout [MAXPATHLEN] = "../mapEdit1.bMap";
+struct square squareList [46500];
+struct square squareGraph[155][300];
+int height = 300;
+int width = 155;
 int features [3][10]; //features are stored with feature num, X, and Y
 int featureNum = 0;
 int homeX = 0;
@@ -38,13 +38,20 @@ int main(int argc, char const *argv[]) {
      //swath: x, y, dir(0,1,2,3), distance(within bounds), weight
      //sweep: x, y, quad(1,2,3,4), delX, delY, weight);
 
-     swath(0, 0, 0, 44, 1);
-     swath(0, 0, 1, 110, 1);
-     sweep(0,43, 1, 110,2, 1);
-     sweep(25,20,1, 80, 5, 1);
-     sweep(30,20, 1, 75, 23, 1);
-     sweep(105,0, 1, 5, 45, 1);
+     //swath(0, 0, 0, 300, 1);
+     //swath(0, 0, 1, 155, 1);
+     //sweep(0,43, 1, 155,2, 1);
+     //sweep(25,20,1, 80, 5, 1);
+     //sweep(30,20, 1, 75, 23, 1);
+     //sweep(105,0, 1, 5, 300, 1);
      //editFeature(94, 10, 100);
+     swath(10, 0, 0, 300, 1);
+     swath(10, 0, 1, 145, 1);
+     sweep(10,43, 1, 145,2, 1);
+     sweep(35,20,1, 80, 5, 1);
+     sweep(30,20, 1, 75, 23, 1);
+     sweep(115,0, 1, 5, 300, 1);
+     editFeature(104, 10, 100);
      //editFeature(71, 17, 202);
      //editFeature(58, 17, 203);
      //editFeature(49, 17, 204);
@@ -104,21 +111,21 @@ int readMap(char* path){
                     token = strtok(line,",\n");
                     //strcpy(curInstr.name, token);
                     curSquare.x = atoi(token);
-                    printf("%d ", atoi(token));
+                    //printf("%d ", atoi(token));
                     j++;
                }else if(j == 1){
                     //strcpy(curInstr.arg1, token);
                     curSquare.y = atoi(token);
-                    printf("%d ", atoi(token));
+                    //printf("%d ", atoi(token));
                     j++;
                }else if(j == 2){
                     //strcpy(curInstr.arg1, token);
                     curSquare.weight = atoi(token);
-                    printf("%d ", atoi(token));
+                    //printf("%d ", atoi(token));
                     j++;
                }else{
                     curSquare.feature = atoi(token);
-                    printf("%d \n", atoi(token));
+                    //printf("%d \n", atoi(token));
                     break;
                }
                token = strtok(NULL, ",\n");
@@ -250,7 +257,7 @@ int editFeature(int x, int y, int featureNum){
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-int printMap(struct square map [110][45]){
+int printMap(struct square map [155][300]){
 
      for(int i = height-1; i >= 0; i--){
           for(int j = 0; j < width; j++){
@@ -282,13 +289,13 @@ int printMap(struct square map [110][45]){
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-int writeBack(struct square map[110][45]){
+int writeBack(struct square map[155][300]){
 
      FILE* mapOutput =fopen(mapout, "w+"); //opens a file for writing and reading
      //will rewrite the map entirely each time
      //printf("%d,%d,%d,%d\n", map[0][0].x, map[0][0].y, map[0][0].weight, map[0][0].feature);
-     for(int q = 0; q < 110; q++){
-          for(int p = 0; p < 45; p++){
+     for(int q = 0; q < 155; q++){
+          for(int p = 0; p < 300; p++){
                fprintf(mapOutput, "%d,%d,%d,%d\n", squareGraph[q][p].x, squareGraph[q][p].y, squareGraph[q][p].weight, squareGraph[q][p].feature);
           }
      }
