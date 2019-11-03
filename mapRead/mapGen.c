@@ -3,7 +3,7 @@
 
 
 int main(int argc, char const *argv[]) {
-  int height = 300;
+  int height = 400;
   int width = 155;
   FILE* fp = fopen("hallwayTest.bMap","w+");
 

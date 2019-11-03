@@ -20,6 +20,14 @@
 #include <math.h>
 #include <time.h>
 
+//pi UART libraries
+#include <wiringPi.h>
+#include <wiringSerial.h>
+
+//linix UART libraries
+#include <fcntl.h>
+#include <termios.h>
+
 #define MAXPATHLEN 1024
 
 //couple of colors

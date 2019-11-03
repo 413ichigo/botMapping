@@ -150,6 +150,7 @@ int mapGen(){
      return 0;
 }
 
+
 int mapPrint(){
      for(int i = 0; i < size; i++){
           for(int j = 0; j < size; j++){

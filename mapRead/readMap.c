@@ -2,8 +2,8 @@
 
 //method headers
 int readMap(char*);
-int printMap(struct square[155][300]);
-int writeBack(struct square[155][300]);
+int printMap(struct square[155][400]);
+int writeBack(struct square[155][400]);
 int editFeature(int x, int y, int featureNum);
 int swath(int x, int y, int dir, int distance, int weight);
 int sweep(int x, int y, int quad, int delX, int delY, int weight);
@@ -12,9 +12,9 @@ int sweep(int x, int y, int quad, int delX, int delY, int weight);
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "hallwayTest.bMap";
 char mapout [MAXPATHLEN] = "../mapEdit1.bMap";
-struct square squareList [46500];
-struct square squareGraph[155][300];
-int height = 300;
+struct square squareList [63000];
+struct square squareGraph[155][400];
+int height = 400;
 int width = 155;
 int features [3][10]; //features are stored with feature num, X, and Y
 int featureNum = 0;
@@ -38,24 +38,20 @@ int main(int argc, char const *argv[]) {
      //swath: x, y, dir(0,1,2,3), distance(within bounds), weight
      //sweep: x, y, quad(1,2,3,4), delX, delY, weight);
 
-     //swath(0, 0, 0, 300, 1);
-     //swath(0, 0, 1, 155, 1);
-     //sweep(0,43, 1, 155,2, 1);
-     //sweep(25,20,1, 80, 5, 1);
-     //sweep(30,20, 1, 75, 23, 1);
-     //sweep(105,0, 1, 5, 300, 1);
-     //editFeature(94, 10, 100);
-     swath(10, 0, 0, 300, 1);
-     swath(10, 0, 1, 145, 1);
-     sweep(10,43, 1, 145,2, 1);
-     sweep(35,20,1, 80, 5, 1);
-     sweep(30,20, 1, 75, 23, 1);
-     sweep(115,0, 1, 5, 300, 1);
+
+     sweep(0, 0, 1, 10,400, 1);
+     swath(0, 0, 1, 145, 1);
+     sweep(30,20,1, 80, 5, 1);
+     sweep(35,20, 1, 95, 23, 1);
+     sweep(115,0, 1, 40, 400, 1);
+     sweep(10,0,1,1,400,1);
+     sweep(35,43,1,120,357,1);
+     sweep(10,43,1,3,357,1);
      editFeature(104, 10, 100);
-     //editFeature(71, 17, 202);
-     //editFeature(58, 17, 203);
-     //editFeature(49, 17, 204);
-     //editFeature(43, 17, 205);
+     editFeature(91, 17, 202);
+     editFeature(68, 17, 203);
+     editFeature(59, 17, 204);
+     editFeature(43, 17, 205);
 
 
      //edit check
@@ -257,7 +253,7 @@ int editFeature(int x, int y, int featureNum){
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-int printMap(struct square map [155][300]){
+int printMap(struct square map [155][400]){
 
      for(int i = height-1; i >= 0; i--){
           for(int j = 0; j < width; j++){
@@ -289,13 +285,13 @@ int printMap(struct square map [155][300]){
 //
 /////////////////////////////////////////////////////////////////////////////////
 
-int writeBack(struct square map[155][300]){
+int writeBack(struct square map[155][400]){
 
      FILE* mapOutput =fopen(mapout, "w+"); //opens a file for writing and reading
      //will rewrite the map entirely each time
      //printf("%d,%d,%d,%d\n", map[0][0].x, map[0][0].y, map[0][0].weight, map[0][0].feature);
      for(int q = 0; q < 155; q++){
-          for(int p = 0; p < 300; p++){
+          for(int p = 0; p < 400; p++){
                fprintf(mapOutput, "%d,%d,%d,%d\n", squareGraph[q][p].x, squareGraph[q][p].y, squareGraph[q][p].weight, squareGraph[q][p].feature);
           }
      }

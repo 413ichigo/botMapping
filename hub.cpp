@@ -14,13 +14,13 @@ int speak(int room);  //the feature of the current square is passed and the appr
 
 
 //map functions
-int printMap(struct square[155][300]);
+int printMap(struct square[155][400]);
 
 
 double sweep[2][419][10]; //up to ten rotations
 int field[30][30];    //map generated from mapGen
-int x;  //current X position
-int y;  //current Y position
+int X = 104;  //current X position
+int Y = 10;  //current Y position
 int dest; //feature number destination
 double angle; //current angle away from wall.
 int nextX;  //destination X
@@ -35,16 +35,27 @@ double arg[5];  //list of arguments to be sent to move
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "mapEdit1.bMap";
 //char mapout [MAXPATHLEN] = "mapEdit1.bMap";
-struct square squareList [46500];
-struct square squareGraph[155][300];
-int height = 300;
+struct square squareList [62000];
+struct square squareGraph[155][400];
+int height = 400;
 int width = 155;
 int features [3][10]; //features are stored with feature num, X, and Y
 int featureNum = 0;
-int homeX = 0;
-int homeY = 0;
 struct Queue* Xqueue;
 struct Queue* Yqueue;
+
+
+
+//lidar read variables
+int element = 0;
+int dividend = 152.4;
+int size = 145;
+int bigSize = 290;
+int map [145][145];
+int bigMap[290][290];
+int heuristicMap [290-145][290-145];
+char lidarin [MAXPATHLEN] = "bathroom.csv";
+
 
 int main(int argc, char const *argv[]) {
 
@@ -198,6 +209,17 @@ int sysInit(){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int move(int act, double arg){
+  if(act == 0){ //forward movement
+    int d = (int)arg;
+    //send command to motor controller here
+  }else if(act == 1){ //rotational movement
+    //convert angle to rotational distance needed to achieve degrees rotated
+    //send command to motor controller here
+  }else{
+    printf("this is an improper function input, act must be a 0 or a 1\n", );
+    return 1;
+  }
+
 
   return 0;
 }
@@ -230,7 +252,31 @@ int scan(int rotations){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int mapGen(){
+  int x=0;
+  int y=0;
 
+  for(int i = 0; i < 491; i++){
+      x = (int) 73 + (((dataRead[1][i])/dividend) * cos(0.0174533*dataRead[0][i]));
+      y = (int) 73 + (((dataRead[1][i])/dividend) * sin(0.0174533*dataRead[0][i]));
+      printf("i : %d\tr : %f\td : %f\tx : %d\ty : %d\tcos : %f\tsin : %f\n",i,dataRead[1][i],dataRead[0][i],x,y,cos(0.0174533*dataRead[0][i]),sin(0.0174533*dataRead[0][i]));
+      if(!((x==73)&&(y==73))){
+          map[x][y] = 1;
+   }
+
+   for(int i = 0; i < size; i++){
+        for(int j = 0; j < size; j++){
+             if(map[i][j] == 0){
+                  printf("%d ", map[i][j]);
+             }else{
+                  printf(ANSI_COLOR_RED"%d "ANSI_COLOR_RESET, map[i][j]);
+             }
+
+             if(j==size-1){
+                  printf("\n");
+             }
+        }
+   }
+   return 0;
   return 0;
 }
 
@@ -261,8 +307,16 @@ int localize(){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int findNext(){  //finds X and Y positions of the next nearest unvisited destination.
-
-  //search forward and adjacent to out to find the next area. BFS is too memory intensive
+  if(firstWaypoint == 0){
+    firstWaypoint = 1;
+    return 0;
+  }else{
+    //find next
+    nextY = Y+1;
+    while (squareGraph[X][nextY] < 100){
+      nextY = Y+1;
+    }
+  }
   return 0;
 }
 
@@ -278,7 +332,9 @@ int findNext(){  //finds X and Y positions of the next nearest unvisited destina
 //
 /////////////////////////////////////////////////////////////////////////////////
 int pathfind(){
-
+  nextDist = sqrt(((nextX-X)^2) + ((nextY-Y)^2));
+  nextAngle = atan((double)(nextX-X)/(double)(nextY-Y))/0.0174533;
+  printf("vectors set! angle of %f, for a distance of %f", nextAngle, nextDist);
   return 0;
 }
 
@@ -294,12 +350,14 @@ int pathfind(){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int speak(int room){
+  printf("speaking!!!\n");
+  sleep(10);
   return 0;
 }
 
 
 
-int printMap(struct square map [155][300]){
+int printMap(struct square map [155][400]){
 
      for(int i = height-1; i >= 0; i--){
           for(int j = 0; j < width; j++){
