@@ -58,7 +58,12 @@ _u32         baudrateArray[2] = {115200, 256000};
 _u32         opt_com_baudrate = 0;
 u_result     op_result;
 bool useArgcBaudrate = false;
-RPlidarDriver * drv = rp::standalone::rplidar::RPlidarDriver::CreateDriver(0);
+RPlidarDriver * drv = RPlidarDriver::CreateDriver(DRIVER_TYPE_SERIALPORT);
+rplidar_response_measurement_node_hq_t nodes[8192];//added
+#ifndef _countof
+#define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
+#endif
+size_t   count = _countof(nodes);//added
 
 //motor controller variables
 
@@ -73,18 +78,15 @@ int bigMap[290][290];
 int heuristicMap [290-145][290-145];
 char lidarin [MAXPATHLEN] = "bathroom.csv";
 
-#ifndef _countof
-#define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
-#endif
 
 int main(int argc, char const *argv[]) {
 
   //initialize hardware components
   printf("initializing hardware..\n");
-
+  signal(SIGINT, ctrlc);
   if(sysInit() == 1){
     printf("I didnt even fuckin start\n");
-    return 1;
+    goto on_finished;
   }
 
   printf("Hardware initialized successfully!!\n");
@@ -110,7 +112,7 @@ int main(int argc, char const *argv[]) {
   printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", X, Y, angle);
 
 
-  //loop
+  //main loop
   while(1){
     printf("Finding next waypoint..\n");
     if(findNext() == 1){
@@ -124,18 +126,36 @@ int main(int argc, char const *argv[]) {
       move(0, nextDist);
 
       //position checking
+
       scan(5);
-      mapGen();
-      localize(); //updates current position if necessary
+      drv->stop();
+      drv->stopMotor();
+      //mapGen();
+      //localize(); //updates current position if necessary
+      return 1;
     }
 
-    speak(dest);
+    //speak(dest);
     //end loop
     scan(5);
-    mapGen();
-    localize();
-    return 1;
+    //mapGen();
+    //localize();
+
+    //for when kill signal is found exit nicely and shut stuff down
+    if (ctrl_c_pressed){
+        break;
+    }
+    //return 1;//why is this here??
   }
+
+
+  //for when program ends
+  drv->stop();
+  drv->stopMotor();
+  // done!
+on_finished:
+  RPlidarDriver::DisposeDriver(drv);
+  drv = NULL;
   return 0;
 }
 
@@ -148,8 +168,86 @@ int main(int argc, char const *argv[]) {
 int sysInit(){
 
   //nathan put your lidar initializing shit in here
+  if (!drv) {
+      fprintf(stderr, "insufficent memory, exit\n");
+      exit(-2);
+  }
+  rplidar_response_device_info_t devinfo;
+  bool connectSuccess = false;
+  // make connection...
+  if(useArgcBaudrate)
+  {
+      if(!drv)
+          drv = RPlidarDriver::CreateDriver(DRIVER_TYPE_SERIALPORT);
+      if (IS_OK(drv->connect(opt_com_path, opt_com_baudrate)))
+      {
+          op_result = drv->getDeviceInfo(devinfo);
+
+          if (IS_OK(op_result))
+          {
+              connectSuccess = true;
+          }
+          else
+          {
+              delete drv;
+              drv = NULL;
+          }
+      }
+  }
+  else
+  {
+      size_t baudRateArraySize = (sizeof(baudrateArray))/ (sizeof(baudrateArray[0]));
+      for(size_t i = 0; i < baudRateArraySize; ++i)
+      {
+          if(!drv)
+              drv = RPlidarDriver::CreateDriver(DRIVER_TYPE_SERIALPORT);
+          if(IS_OK(drv->connect(opt_com_path, baudrateArray[i])))
+          {
+              op_result = drv->getDeviceInfo(devinfo);
+
+              if (IS_OK(op_result))
+              {
+                  connectSuccess = true;
+                  break;
+              }
+              else
+              {
+                  delete drv;
+                  drv = NULL;
+              }
+          }
+      }
+  }
+
+  if (!connectSuccess) {
+
+      fprintf(stderr, "Error, cannot bind to the specified serial port %s.\n"
+          , opt_com_path);
+      return 1;
+  }
+
+  printf("RPLIDAR S/N: ");
+  for (int pos = 0; pos < 16 ;++pos) {
+      printf("%02X", devinfo.serialnum[pos]);
+  }
+
+  printf("\n"
+          "Firmware Ver: %d.%02d\n"
+          "Hardware Rev: %d\n"
+          , devinfo.firmware_version>>8
+          , devinfo.firmware_version & 0xFF
+          , (int)devinfo.hardware_version);
 
 
+
+  // check health...
+  if (!checkRPLIDARHealth(drv)) {
+      return 1;
+  }
+
+
+  drv->startMotor();
+  drv->startScan(0,1);
   //map stuff
 
   FILE* fp = fopen(mapin,"r");    //originally fp = fopen(in->paths[k],"r"); opens the path at "path" for read
@@ -198,11 +296,11 @@ int sysInit(){
        //if location feature, add to location list
        if(curSquare.feature > 100){
 
-            features[1][featureNum] = curSquare.x;
+            features[0][featureNum] = curSquare.x;
             //enqueue(Xqueue, curSquare.x);
-            features[2][featureNum] = curSquare.y;
+            features[1][featureNum] = curSquare.y;
             //enqueue(Yqueue, curSquare.y);
-            features[3][featureNum] = curSquare.feature;
+            features[2][featureNum] = curSquare.feature;
             featureNum = featureNum + 1;
 
        }
@@ -256,7 +354,22 @@ int move(int act, double arg){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int scan(int rotations){
+  rplidar_response_measurement_node_hq_t nodes[8192];
+  size_t   count = _countof(nodes);
 
+  op_result = drv->grabScanDataHq(nodes, count);
+
+  if (IS_OK(op_result)) {
+      drv->ascendScanData(nodes, count);
+      for (int pos = 0; pos < (int)count ; ++pos) {
+        //myfile << nodes[pos].angle_z_q14 * 90.f / (1 << 14) << "," << nodes[pos].dist_mm_q2/4.0f << "\n";
+          printf("%s theta: %03.2f Dist: %8.0f Q: %d \n",
+              (nodes[pos].flag & RPLIDAR_RESP_MEASUREMENT_SYNCBIT) ?"S ":"  ",
+              (nodes[pos].angle_z_q14 * 90.f / (1 << 14)),
+              nodes[pos].dist_mm_q2/4.0f,
+              nodes[pos].quality);
+      }
+    }
     return 0;
 }
 
