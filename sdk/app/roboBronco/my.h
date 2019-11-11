@@ -20,6 +20,8 @@
 #include <math.h>
 #include <time.h>
 
+#include "queue.h"
+
 //pi UART libraries
 //#include <wiringPi.h>
 //#include <wiringSerial.h>
@@ -29,8 +31,6 @@
 #include <termios.h>
 
 //rplidar libraries
-#include <iostream>
-#include <fstream>
 #include <unistd.h>
 #include <signal.h>
 

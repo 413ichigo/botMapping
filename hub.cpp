@@ -13,6 +13,7 @@ int pathfind(); //A* or djikstra, generates instruction sets in "action" and "ar
 int speak(int room);  //the feature of the current square is passed and the appropriate speach is found
 
 
+
 //map functions
 int printMap(struct square[155][400]);
 
@@ -30,10 +31,11 @@ double nextDist;
 int action[5];  //list of actions to be sent to move
 double arg[5];  //list of arguments to be sent to move
 
-
 //map variables
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "mapEdit1.bMap";
+int firstWaypoint = 0;
+
 //char mapout [MAXPATHLEN] = "mapEdit1.bMap";
 struct square squareList [62000];
 struct square squareGraph[155][400];
@@ -44,9 +46,23 @@ int featureNum = 0;
 struct Queue* Xqueue;
 struct Queue* Yqueue;
 
+//lidar variables and stuff
+using namespace rp::standalone::rplidar;
+static inline void delay(_word_size_t ms);
+bool checkRPLIDARHealth(RPlidarDriver * drv);
+void ctrlc(int);
+bool ctrl_c_pressed;
+const char * opt_com_path = "/dev/ttyUSB0";//lidar port
+_u32         baudrateArray[2] = {115200, 256000};
+_u32         opt_com_baudrate = 0;
+u_result     op_result;
+bool useArgcBaudrate = false;
+RPlidarDriver * drv = rp::standalone::rplidar::RPlidarDriver::CreateDriver(0);
 
+//motor controller variables
 
 //lidar read variables
+double dataRead[2][491];
 int element = 0;
 int dividend = 152.4;
 int size = 145;
@@ -56,6 +72,9 @@ int bigMap[290][290];
 int heuristicMap [290-145][290-145];
 char lidarin [MAXPATHLEN] = "bathroom.csv";
 
+#ifndef _countof
+#define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
+#endif
 
 int main(int argc, char const *argv[]) {
 
@@ -87,7 +106,7 @@ int main(int argc, char const *argv[]) {
     return 1;
   }
 
-  printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", x, y, angle);
+  printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", X, Y, angle);
 
 
   //loop
@@ -98,7 +117,7 @@ int main(int argc, char const *argv[]) {
       break;
     }
     printf("Found one! It is at %d, %d and is room %d\n", nextX, nextY, dest);
-    while((x!=nextX) && (y != nextY)){
+    while((X!=nextX) && (Y != nextY)){
       pathfind(); //finds nextAngle and nextDist, a fraction of the total distance traveled
       move(1, nextAngle);
       move(0, nextDist);
@@ -145,7 +164,7 @@ int sysInit(){
 
   while ((length=getline(&line, &len, fp)) != -1) {
 
-       char* token = "initializer";
+       const char * token = "initializer"; //if things break here remove const
        struct square curSquare;
        int j = 0;
        while (token) {
@@ -216,7 +235,7 @@ int move(int act, double arg){
     //convert angle to rotational distance needed to achieve degrees rotated
     //send command to motor controller here
   }else{
-    printf("this is an improper function input, act must be a 0 or a 1\n", );
+    printf("this is an improper function input, act must be a 0 or a 1\n" );
     return 1;
   }
 
@@ -261,14 +280,15 @@ int mapGen(){
       printf("i : %d\tr : %f\td : %f\tx : %d\ty : %d\tcos : %f\tsin : %f\n",i,dataRead[1][i],dataRead[0][i],x,y,cos(0.0174533*dataRead[0][i]),sin(0.0174533*dataRead[0][i]));
       if(!((x==73)&&(y==73))){
           map[x][y] = 1;
-   }
+      }
+  }
 
    for(int i = 0; i < size; i++){
         for(int j = 0; j < size; j++){
              if(map[i][j] == 0){
                   printf("%d ", map[i][j]);
              }else{
-                  printf(ANSI_COLOR_RED"%d "ANSI_COLOR_RESET, map[i][j]);
+                  printf( ANSI_COLOR_RED " %d " ANSI_COLOR_RESET, map[i][j]);
              }
 
              if(j==size-1){
@@ -313,7 +333,7 @@ int findNext(){  //finds X and Y positions of the next nearest unvisited destina
   }else{
     //find next
     nextY = Y+1;
-    while (squareGraph[X][nextY] < 100){
+    while (squareGraph[X][nextY].feature < 100){
       nextY = Y+1;
     }
   }
@@ -375,4 +395,42 @@ int printMap(struct square map [155][400]){
      }
 
      return 0;
+}
+
+static inline void delay(_word_size_t ms){
+    while (ms>=1000){
+        usleep(1000*1000);
+        ms-=1000;
+    };
+    if (ms!=0)
+        usleep(ms*1000);
+}
+
+bool checkRPLIDARHealth(RPlidarDriver * drv)
+{
+    u_result     op_result;
+    rplidar_response_device_health_t healthinfo;
+
+
+    op_result = drv->getHealth(healthinfo);
+    if (IS_OK(op_result)) { // the macro IS_OK is the preperred way to judge whether the operation is succeed.
+        printf("RPLidar health status : %d\n", healthinfo.status);
+        if (healthinfo.status == RPLIDAR_STATUS_ERROR) {
+            fprintf(stderr, "Error, rplidar internal error detected. Please reboot the device to retry.\n");
+            // enable the following code if you want rplidar to be reboot by software
+            // drv->reset();
+            return false;
+        } else {
+            return true;
+        }
+
+    } else {
+        fprintf(stderr, "Error, cannot retrieve the lidar health code: %x\n", op_result);
+        return false;
+    }
+}
+
+void ctrlc(int)
+{
+    ctrl_c_pressed = true;
 }
