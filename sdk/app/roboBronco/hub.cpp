@@ -6,7 +6,7 @@
 //overhead functions
 int sysInit();  //initialzes all hardware items and loads map from .bMap file
 int move(int act, double arg); //act 0: rotate, act 1: forward, arg:dist/deg
-int scan(int rotations); //tells lidar to scan and reads the data into "sweep"
+int scan(); //tells lidar to scan and reads the data into "sweep"
 int mapGen();   //generates map (fuck you reid), JK, generates "field" from "sweep"
 int localize(); //compares X and Y of current location as well as angle from wall to one in memory
 int findNext(); //finds X and Y positions of the next nearest unvisited destination.
@@ -114,7 +114,7 @@ int main(int argc, char const *argv[]) {
 
   printf("Scanning and localizing..\n");
 
-  if(scan(10) == 1){
+  if(scan() == 1){
     printf("I cant fuckin see!\n");
     return 1;
   }
@@ -141,7 +141,7 @@ int main(int argc, char const *argv[]) {
 
       //position checking
 
-      scan(5);
+      scan();
       drv->stop();
       drv->stopMotor();
       //mapGen();
@@ -151,7 +151,7 @@ int main(int argc, char const *argv[]) {
 
     //speak(dest);
     //end loop
-    scan(5);
+    scan();
     //mapGen();
     //localize();
 
@@ -385,21 +385,30 @@ int move(int act, double arg){
 // output: error codes if they exist. Reads lidar data into "sweep" variable
 //
 /////////////////////////////////////////////////////////////////////////////////
-int scan(int rotations){
+int scan(){
   rplidar_response_measurement_node_hq_t nodes[8192];
   size_t   count = _countof(nodes);
 
   op_result = drv->grabScanDataHq(nodes, count);
-
+	//usleep(4000000);
   if (IS_OK(op_result)) {
       drv->ascendScanData(nodes, count);
-      for (int pos = 0; pos < (int)count ; ++pos) {
+      for (int pos = 0; pos < (int)count ; pos++) {
         //myfile << nodes[pos].angle_z_q14 * 90.f / (1 << 14) << "," << nodes[pos].dist_mm_q2/4.0f << "\n";
-          printf("%s theta: %03.2f Dist: %8.0f Q: %d \n",
+        
+        sweep[0][pos] = nodes[pos].angle_z_q14 * 90.f / (1 << 14);
+        if(nodes[pos].dist_mm_q2/4.0f == 0){
+			sweep[1][pos] = 100000;
+		}
+		else{
+			sweep[1][pos] = nodes[pos].dist_mm_q2/4.0f;
+		}
+        //printf("angle: %03.2f Dist: %8.0f\n", sweep[0][pos], sweep[1][pos]);
+          /*printf("%s theta: %03.2f Dist: %8.0f Q: %d pos: %d\n",
               (nodes[pos].flag & RPLIDAR_RESP_MEASUREMENT_SYNCBIT) ?"S ":"  ",
               (nodes[pos].angle_z_q14 * 90.f / (1 << 14)),
               nodes[pos].dist_mm_q2/4.0f,
-              nodes[pos].quality);
+              nodes[pos].quality, pos);*/
       }
     }
     //finds minimum distance of object from lidar. Should be the wall
