@@ -125,6 +125,7 @@ int main(int argc, char const *argv[]) {
 
   printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", X, Y, angle);
 
+  maintainForward();
 
   //main loop
   while(1){
@@ -395,7 +396,7 @@ int scan(){
       drv->ascendScanData(nodes, count);
       for (int pos = 0; pos < (int)count ; pos++) {
         //myfile << nodes[pos].angle_z_q14 * 90.f / (1 << 14) << "," << nodes[pos].dist_mm_q2/4.0f << "\n";
-        
+
         sweep[0][pos] = nodes[pos].angle_z_q14 * 90.f / (1 << 14);
         if(nodes[pos].dist_mm_q2/4.0f == 0){
 			sweep[1][pos] = 100000;
