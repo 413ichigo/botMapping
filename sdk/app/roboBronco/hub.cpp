@@ -14,12 +14,26 @@ int pathfind(); //A* or djikstra, generates instruction sets in "action" and "ar
 int speak(int room);  //the feature of the current square is passed and the appropriate speach is found
 
 
+// mid level motor control functions
+int maintainForward();
+int nudgeRight(); //push right wheel forward a little faster for a second.
+int nudgeLeft();  //push  left wheel forward a little faster for a second.
+int quickRotateR(); //stops and rotates right
+int quickRotateL(); //stops and rotates left
+//low level motor control functions
+int forward();
+int reverse();
+int right();
+int left();
+int stop();
 
 //map functions
 int printMap(struct square[155][400]);
 
 
-double sweep[2][419][10]; //up to ten rotations
+double sweep[2][419]; //up to ten rotations
+int fd;
+int choice;
 int field[30][30];    //map generated from mapGen
 int X = 104;  //current X position
 int Y = 10;  //current Y position
@@ -36,6 +50,7 @@ double arg[5];  //list of arguments to be sent to move
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "mapEdit1.bMap";
 int firstWaypoint = 0;
+int wallDist = 5000;
 
 //char mapout [MAXPATHLEN] = "mapEdit1.bMap";
 struct square squareList [62000];
@@ -310,7 +325,25 @@ int sysInit(){
        squareCount++;
   }
 
-  printMap(squareGraph);
+  //printMap(squareGraph);
+
+  if((fd = serialOpen("/dev/ttyS0",115200)) < 0){
+		fprintf(stderr, "unable to open serial device: %s\n", strerror(errno));
+		printf("unable to open serial device\n");
+		return 1;
+	}
+	if(wiringPiSetup() == -1){
+		fprintf(stdout, "unable to start wiringPi: %s\n", strerror(errno));
+		printf("unable to start wiringPi\n");
+		return 2;
+	}
+
+	serialPuts(fd, "^rwd 0_");
+	serialPuts(fd, "^rwd 0_");
+	serialPuts(fd, "^rwd 0_");
+	usleep(10000);
+
+	stop(fd);
   return 0;
 }
 
@@ -370,6 +403,15 @@ int scan(int rotations){
               nodes[pos].quality);
       }
     }
+    //finds minimum distance of object from lidar. Should be the wall
+    for(int f = 0; f < 491; ++f){
+      if(sweep[f] < wallDist){
+        wallDist = sweep[1][f];
+        wallAng = sweep[0][f];
+      }
+    }
+    //results in wallDist holding the distance from the wall and wallAng holding the angle of that measurement
+
     return 0;
 }
 

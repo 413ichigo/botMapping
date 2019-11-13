@@ -23,8 +23,8 @@
 #include "queue.h"
 
 //pi UART libraries
-//#include <wiringPi.h>
-//#include <wiringSerial.h>
+#include <wiringPi.h>
+#include <wiringSerial.h>
 
 //linix UART libraries
 #include <fcntl.h>
