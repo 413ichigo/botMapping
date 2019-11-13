@@ -16,10 +16,8 @@ int speak(int room);  //the feature of the current square is passed and the appr
 
 // mid level motor control functions
 int maintainForward();
-int nudgeRight(); //push right wheel forward a little faster for a second.
-int nudgeLeft();  //push  left wheel forward a little faster for a second.
-int quickRotateR(); //stops and rotates right
-int quickRotateL(); //stops and rotates left
+void rightNudge(int fd); //push right wheel forward a little faster for a second.
+void leftNudge(int fd);  //push  left wheel forward a little faster for a second.
 //low level motor control functions
 void forward(int fd);
 void reverse(int fd);
@@ -31,7 +29,7 @@ void stop(int fd);
 int printMap(struct square[155][400]);
 
 
-double sweep[2][419]; //up to ten rotations
+double sweep[2][PACKETSIZE]; //up to ten rotations
 int fd;
 int choice;
 int field[30][30];    //map generated from mapGen
@@ -405,8 +403,8 @@ int scan(int rotations){
       }
     }
     //finds minimum distance of object from lidar. Should be the wall
-    for(int f = 0; f < 491; ++f){
-      if(sweep[1][f] < wallDist){
+    for(int f = 0; f < PACKETSIZE; f++){
+      if((sweep[1][f] < wallDist)&&(sweep[0][f] < 110)&&(sweep[0][f] > 70)){
         wallDist = sweep[1][f];
         wallAng = sweep[0][f];
       }
@@ -612,7 +610,41 @@ void right(int fd){
 	usleep(10000);
 }
 
+void rightNudge(int fd){
+	serialPuts(fd, "!G 1 500_!G 2 550_");
+	usleep(100000);
+  forward(fd);
+}
+
+void leftNudge(int fd){
+	serialPuts(fd, "!G 1 550_!G 2 500_");;
+  usleep(100000);
+  forward(fd);
+}
+
 void stop(int fd){
 	serialPuts(fd, "!G 1 0_!G 2 0_");
 	usleep(10000);
+}
+
+
+int maintainForward(){
+  double SPACE = 838;
+  double THRESHOLD = 100;
+  forward(fd);
+  usleep(500000);
+  while(1){
+    //keep moving forward
+    if(wallDist < (SPACE-THRESHOLD)){
+      leftNudge(fd);
+    }else if(wallDist > (SPACE+THRESHOLD)){
+        rightNudge(fd);
+    }else{
+      printf("fine: ");
+    }
+    scan();
+    printf("%f\n", wallDist);
+  }
+  //needs correction
+  return 0;
 }

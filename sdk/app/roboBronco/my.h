@@ -35,6 +35,7 @@
 #include <signal.h>
 
 #define MAXPATHLEN 1024
+#define PACKETSIZE 320
 
 //couple of colors
 #define ANSI_COLOR_RED     "\x1b[31m"
