@@ -392,16 +392,19 @@ int scan(int rotations){
   size_t   count = _countof(nodes);
 
   op_result = drv->grabScanDataHq(nodes, count);
-
+	usleep(4000000);
   if (IS_OK(op_result)) {
       drv->ascendScanData(nodes, count);
-      for (int pos = 0; pos < (int)count ; ++pos) {
+      for (int pos = 0; pos < (int)count ; pos++) {
         //myfile << nodes[pos].angle_z_q14 * 90.f / (1 << 14) << "," << nodes[pos].dist_mm_q2/4.0f << "\n";
-          printf("%s theta: %03.2f Dist: %8.0f Q: %d \n",
+        sweep[0][pos] = nodes[pos].angle_z_q14 * 90.f / (1 << 14);
+        sweep[1][pos] = nodes[pos].dist_mm_q2/4.0f;
+        //printf("angle: %03.2f Dist: %8.0f\n", sweep[0][pos], sweep[1][pos]);
+          /*printf("%s theta: %03.2f Dist: %8.0f Q: %d pos: %d\n",
               (nodes[pos].flag & RPLIDAR_RESP_MEASUREMENT_SYNCBIT) ?"S ":"  ",
               (nodes[pos].angle_z_q14 * 90.f / (1 << 14)),
               nodes[pos].dist_mm_q2/4.0f,
-              nodes[pos].quality);
+              nodes[pos].quality, pos);*/
       }
     }
     //finds minimum distance of object from lidar. Should be the wall
