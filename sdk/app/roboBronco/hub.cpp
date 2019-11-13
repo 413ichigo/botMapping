@@ -21,11 +21,11 @@ int nudgeLeft();  //push  left wheel forward a little faster for a second.
 int quickRotateR(); //stops and rotates right
 int quickRotateL(); //stops and rotates left
 //low level motor control functions
-int forward();
-int reverse();
-int right();
-int left();
-int stop();
+void forward(int fd);
+void reverse(int fd);
+void right(int fd);
+void left(int fd);
+void stop(int fd);
 
 //map functions
 int printMap(struct square[155][400]);
@@ -50,7 +50,8 @@ double arg[5];  //list of arguments to be sent to move
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "mapEdit1.bMap";
 int firstWaypoint = 0;
-int wallDist = 5000;
+double wallDist = 5000;
+double wallAng = 0;
 
 //char mapout [MAXPATHLEN] = "mapEdit1.bMap";
 struct square squareList [62000];
@@ -405,7 +406,7 @@ int scan(int rotations){
     }
     //finds minimum distance of object from lidar. Should be the wall
     for(int f = 0; f < 491; ++f){
-      if(sweep[f] < wallDist){
+      if(sweep[1][f] < wallDist){
         wallDist = sweep[1][f];
         wallAng = sweep[0][f];
       }
@@ -589,4 +590,29 @@ bool checkRPLIDARHealth(RPlidarDriver * drv)
 void ctrlc(int)
 {
     ctrl_c_pressed = true;
+}
+
+void forward(int fd){
+	serialPuts(fd, "!G 1 500_!G 2 500_");
+	usleep(10000);
+}
+
+void reverse(int fd){
+	serialPuts(fd, "!G 1 -500_!G 2 -500_");
+	usleep(10000);
+}
+
+void left(int fd){
+	serialPuts(fd, "!G 1 -500_!G 2 500_");
+	usleep(10000);
+}
+
+void right(int fd){
+	serialPuts(fd, "!G 1 500_!G 2 -500_");
+	usleep(10000);
+}
+
+void stop(int fd){
+	serialPuts(fd, "!G 1 0_!G 2 0_");
+	usleep(10000);
 }
