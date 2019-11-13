@@ -27,7 +27,7 @@ CXXSRC += hub.cpp
 C_INCLUDES += -I$(CURDIR)/../../sdk/include -I$(CURDIR)/../../sdk/src
 
 EXTRA_OBJ := 
-LD_LIBS += queue.c -lstdc++ -lpthread -lm
+LD_LIBS += queue.c -lstdc++ -lpthread -lm -lwiringPi
 
 all: build_app
 
