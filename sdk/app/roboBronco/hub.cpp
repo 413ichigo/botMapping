@@ -2,12 +2,23 @@
 #include "rplidar.h" //RPLIDAR standard sdk, all-in-one header
 #include <iostream>//cant be in my.h because its only for cpp files
 #include <fstream>//cant be in my.h because its only for cpp files
+#include <string>
+
+#define FPIN 3
+#define BPIN 4
+#define LPIN 2
+#define RPIN 1
+#define SPIN 0
+#define StartPIN 7
+#define LNPIN 5
+#define RNPIN 6
+
 
 //overhead functions
 int sysInit();  //initialzes all hardware items and loads map from .bMap file
 int move(int act, double arg); //act 0: rotate, act 1: forward, arg:dist/deg
 int scan(); //tells lidar to scan and reads the data into "sweep"
-int mapGen();   //generates map (fuck you reid), JK, generates "field" from "sweep"
+int mapGen();   //generates map (fuck you reid), generates "field" from "sweep"
 int localize(); //compares X and Y of current location as well as angle from wall to one in memory
 int findNext(); //finds X and Y positions of the next nearest unvisited destination.
 int pathfind(); //A* or djikstra, generates instruction sets in "action" and "argument"
@@ -16,10 +27,12 @@ int speak(int room);  //the feature of the current square is passed and the appr
 
 // mid level motor control functions
 int maintainForward();
+int door(); 
 void rightNudge(int fd); //push right wheel forward a little faster for a second.
 void leftNudge(int fd);  //push  left wheel forward a little faster for a second.
 //low level motor control functions
 void forward(int fd);
+void resume(int fd);
 void reverse(int fd);
 void right(int fd);
 void left(int fd);
@@ -32,6 +45,7 @@ int printMap(struct square[155][400]);
 double sweep[2][PACKETSIZE]; //up to ten rotations
 int fd;
 int choice;
+int d; 	//door flag
 int field[30][30];    //map generated from mapGen
 int X = 104;  //current X position
 int Y = 10;  //current Y position
@@ -49,7 +63,14 @@ int squareCount = 0;
 char mapin [MAXPATHLEN] = "mapEdit1.bMap";
 int firstWaypoint = 0;
 double wallDist = 5000;
+double prevWallDist = 0; 
 double wallAng = 0;
+int towards = 0;
+int away = 0; 
+int oneCheck = 0; 
+int roomsFound = 0; 
+char roomNums[10][50] = {"A-211","A-212", "A-209", "A-210", "A-207", "A-208", "A-214", "ELEVATOR HALLWAY next"};
+
 
 //char mapout [MAXPATHLEN] = "mapEdit1.bMap";
 struct square squareList [62000];
@@ -62,12 +83,19 @@ struct Queue* Xqueue;
 struct Queue* Yqueue;
 
 //lidar variables and stuff
+using namespace std;
+
+string roomAudio[10] = {"play audio/A-212.mp3","play audio/A-211.mp3"
+	, "play audio/A-209.mp3", "play audio/A-210.mp3", "mpg123 audio/A-207.mp3"
+	, "mpg123 audio/A-208.mp3", "mpg123 audio/A-214.mp3", "mpg123 audio/elevator.mp3"};
+
+
 using namespace rp::standalone::rplidar;
 static inline void delay(_word_size_t ms);
 bool checkRPLIDARHealth(RPlidarDriver * drv);
 void ctrlc(int);
 bool ctrl_c_pressed;
-const char * opt_com_path = "/dev/ttyUSB0";//lidar port
+const char * opt_com_path = "/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0";//lidar port
 _u32         baudrateArray[2] = {115200, 256000};
 _u32         opt_com_baudrate = 0;
 u_result     op_result;
@@ -92,8 +120,22 @@ int bigMap[290][290];
 int heuristicMap [290-145][290-145];
 char lidarin [MAXPATHLEN] = "bathroom.csv";
 
-
+void my_handler(int s){
+	stop(fd);
+	printf("\nCaught signal %d\n",s);
+	printf("Kill detected exiting program\n");
+	drv->stop();
+    drv->stopMotor();
+    RPlidarDriver::DisposeDriver(drv);
+    drv = NULL;
+    free(drv);
+    free(Xqueue);
+    free(Yqueue);
+	exit(1);
+	//return;	
+}
 int main(int argc, char const *argv[]) {
+
 
   //initialize hardware components
   printf("initializing hardware..\n");
@@ -106,10 +148,10 @@ int main(int argc, char const *argv[]) {
   printf("Hardware initialized successfully!!\n");
 
   printf("Testing motors..\n");
-  if((move(1,1) == 1) && (move(1,-1) == 1)){ //move forward and back
-    printf("I'm a dumb robot and i cant move\n");
-    return 1;
-  }
+  //if((move(1,1) == 1) && (move(1,-1) == 1)){ //move forward and back
+    //printf("I'm a dumb robot and i cant move\n");
+    //return 1;
+  //}
   printf("Moved successfully!!\n");
 
   printf("Scanning and localizing..\n");
@@ -118,15 +160,15 @@ int main(int argc, char const *argv[]) {
     printf("I cant fuckin see!\n");
     return 1;
   }
-  if(mapGen() == 1){
-    printf("Location not found!\n");
-    return 1;
-  }
+  //if(mapGen() == 1){
+    //printf("Location not found!\n");
+    //return 1;
+  //}
 
-  printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", X, Y, angle);
+  //printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", X, Y, angle);
 
   maintainForward();
-
+	//forward(fd);
   //main loop
   while(1){
     printf("Finding next waypoint..\n");
@@ -181,6 +223,29 @@ on_finished:
 //
 /////////////////////////////////////////////////////////////////////////////////
 int sysInit(){
+	
+wiringPiSetup();
+//wiringPiSetupGpio();
+//GPIO INIT 
+pinMode(0, OUTPUT);
+pinMode(1, OUTPUT);
+pinMode(2, OUTPUT);
+pinMode(3, OUTPUT);
+pinMode(4, OUTPUT);
+pinMode(5, OUTPUT);
+pinMode(6, OUTPUT);
+pinMode(7, OUTPUT);
+	
+digitalWrite(0, HIGH);
+digitalWrite(1, HIGH);
+digitalWrite(2, HIGH);
+digitalWrite(3, HIGH);
+digitalWrite(4, HIGH);
+digitalWrite(5, HIGH);
+digitalWrite(6, HIGH);
+digitalWrite(7, HIGH);
+
+
 
   //nathan put your lidar initializing shit in here
   if (!drv) {
@@ -238,7 +303,7 @@ int sysInit(){
 
       fprintf(stderr, "Error, cannot bind to the specified serial port %s.\n"
           , opt_com_path);
-      return 1;
+      //return 1;
   }
 
   printf("RPLIDAR S/N: ");
@@ -257,7 +322,7 @@ int sysInit(){
 
   // check health...
   if (!checkRPLIDARHealth(drv)) {
-      return 1;
+      //return 1;
   }
 
 
@@ -327,7 +392,7 @@ int sysInit(){
 
   //printMap(squareGraph);
 
-  if((fd = serialOpen("/dev/ttyS0",115200)) < 0){
+  if((fd = serialOpen("/dev/ttyS0 ",115200)) < 0){
 		fprintf(stderr, "unable to open serial device: %s\n", strerror(errno));
 		printf("unable to open serial device\n");
 		return 1;
@@ -361,7 +426,7 @@ int sysInit(){
 /////////////////////////////////////////////////////////////////////////////////
 int move(int act, double arg){
   if(act == 0){ //forward movement
-    int d = (int)arg;
+    //int d = (int)arg;
     //send command to motor controller here
   }else if(act == 1){ //rotational movement
     //convert angle to rotational distance needed to achieve degrees rotated
@@ -389,7 +454,8 @@ int move(int act, double arg){
 int scan(){
   rplidar_response_measurement_node_hq_t nodes[8192];
   size_t   count = _countof(nodes);
-
+	prevWallDist = wallDist; 
+	wallDist = 5000000;
   op_result = drv->grabScanDataHq(nodes, count);
 	//usleep(4000000);
   if (IS_OK(op_result)) {
@@ -404,6 +470,10 @@ int scan(){
 		else{
 			sweep[1][pos] = nodes[pos].dist_mm_q2/4.0f;
 		}
+	if((sweep[1][pos] < wallDist)&&(sweep[0][pos] < 95)&&(sweep[0][pos] > 85)){
+        wallDist = sweep[1][pos];
+        wallAng = sweep[0][pos];
+      }
         //printf("angle: %03.2f Dist: %8.0f\n", sweep[0][pos], sweep[1][pos]);
           /*printf("%s theta: %03.2f Dist: %8.0f Q: %d pos: %d\n",
               (nodes[pos].flag & RPLIDAR_RESP_MEASUREMENT_SYNCBIT) ?"S ":"  ",
@@ -413,12 +483,16 @@ int scan(){
       }
     }
     //finds minimum distance of object from lidar. Should be the wall
-    for(int f = 0; f < PACKETSIZE; f++){
-      if((sweep[1][f] < wallDist)&&(sweep[0][f] < 110)&&(sweep[0][f] > 70)){
-        wallDist = sweep[1][f];
-        wallAng = sweep[0][f];
-      }
-    }
+	if(((wallDist - prevWallDist) > 200)&&oneCheck != 0){d = 1; oneCheck = 0; }else if(((prevWallDist - wallDist) > 200)&&oneCheck != 0){d = 0; oneCheck = 0;}else{
+	oneCheck = 1; 
+		if(prevWallDist < wallDist){
+			away = 1; 
+			towards = 0; 
+		}else{
+			away = 0; 
+			towards = 1; 
+		}
+	}
     //results in wallDist holding the distance from the wall and wallAng holding the angle of that measurement
 
     return 0;
@@ -535,9 +609,13 @@ int pathfind(){
 //
 /////////////////////////////////////////////////////////////////////////////////
 int speak(int room){
-  printf("speaking!!!\n");
-  sleep(10);
-  return 0;
+	printf("FOUND ROOM %s\n", roomNums[roomsFound]);
+	usleep(1000000);
+	printf("command:\t %s\n",roomAudio[roomsFound].c_str());
+	system(roomAudio[roomsFound].c_str());	
+	usleep(1000000);
+	
+	return 0;
 }
 
 
@@ -601,60 +679,157 @@ void ctrlc(int)
 }
 
 void forward(int fd){
-	serialPuts(fd, "!G 1 500_!G 2 500_");
-	usleep(10000);
+
+	digitalWrite(StartPIN, LOW);
+	usleep(1);
+	digitalWrite(StartPIN, HIGH);
+	//printf("FORWARD\t");
+	//serialPuts(fd, "!G 1 0_!G 2 600_");
+	//usleep(300000);
+	//serialPuts(fd, "!G 1 540_!G 2 600_");
+	//usleep(10000);
 }
 
 void reverse(int fd){
-	serialPuts(fd, "!G 1 -500_!G 2 -500_");
-	usleep(10000);
+	digitalWrite(BPIN, LOW);
+	usleep(1);
+	digitalWrite(BPIN, HIGH);
+	printf("stopping/n");
+	//serialPuts(fd, "!G 1 0_!G 2 -600_");
+	//usleep(300000);
+	//serialPuts(fd, "!G 1 -545_!G 2 -600_");
+	//usleep(10000);
 }
 
 void left(int fd){
-	serialPuts(fd, "!G 1 -500_!G 2 500_");
-	usleep(10000);
+	digitalWrite(LPIN, LOW);
+	usleep(1);
+	digitalWrite(LPIN, HIGH);
+	//serialPuts(fd, "!G 1 -350_!G 2 450_");
+	//usleep(10000);
 }
 
 void right(int fd){
-	serialPuts(fd, "!G 1 500_!G 2 -500_");
-	usleep(10000);
-}
-
-void rightNudge(int fd){
-	serialPuts(fd, "!G 1 500_!G 2 550_");
-	usleep(100000);
-  forward(fd);
-}
-
-void leftNudge(int fd){
-	serialPuts(fd, "!G 1 550_!G 2 500_");;
-  usleep(100000);
-  forward(fd);
+	digitalWrite(RPIN, LOW);
+	usleep(1);
+	digitalWrite(RPIN, HIGH);
+	//serialPuts(fd, "!G 1 350_!G 2 -450_");
+	//usleep(10000);
 }
 
 void stop(int fd){
-	serialPuts(fd, "!G 1 0_!G 2 0_");
-	usleep(10000);
+	digitalWrite(SPIN, LOW);
+	usleep(1000);
+	digitalWrite(SPIN, HIGH);
+	//printf("calling stop");
+	//serialPuts(fd, "!G 1 0_!G 2 0_");
+	//usleep(10000);
+}
+
+void resume(int fd){
+	digitalWrite(FPIN, LOW); 
+	usleep(1);
+	digitalWrite(FPIN, HIGH);
+	//serialPuts(fd, "!G 1 540_!G 2 600_");
+	//usleep(10000);
+}
+
+void leftNudge(int fd){
+	digitalWrite(RNPIN, LOW);	
+	usleep(1);
+	digitalWrite(RNPIN, HIGH);
+	//printf("nudged left, theoreticallly\t");
+	//serialPuts(fd, "!G 1 590_!G 2 600_");
+	//usleep(100000);
+	//resume(fd);
+}
+
+void rightNudge(int fd){
+	digitalWrite(LNPIN, LOW);	
+	usleep(1);
+	digitalWrite(LNPIN, HIGH);
+	//printf("nudged right, theoreticallly\t");
+	//serialPuts(fd, "!G 1 540_!G 2 650_");
+	//usleep(100000);
+	//resume(fd);
 }
 
 
-int maintainForward(){
-  double SPACE = 838;
-  double THRESHOLD = 100;
+
+
+int maintainForward(){	
+  double SPACE = 800;
+  double THRESHOLD = 50;
+  scan();
+  scan();
+  scan();
   forward(fd);
-  usleep(500000);
+  usleep(500);	//change back if FUCKED
   while(1){
+	  	//catch kill signal
+	struct sigaction sigIntHandler;
+	
+	sigIntHandler.sa_handler = my_handler;
+	sigemptyset(&sigIntHandler.sa_mask);
+	sigIntHandler.sa_flags = 0;
+	
+	sigaction(SIGINT, &sigIntHandler, NULL);
     //keep moving forward
     if(wallDist < (SPACE-THRESHOLD)){
-      leftNudge(fd);
+	if(towards){leftNudge(fd);}
     }else if(wallDist > (SPACE+THRESHOLD)){
-        rightNudge(fd);
+        if(away){rightNudge(fd);}
     }else{
-      printf("fine: ");
+	printf("fine: \t");
+	resume(fd);
     }
     scan();
+	if(d == 1){door();}
     printf("%f\n", wallDist);
   }
-  //needs correction
+ //needs correction
   return 0;
+}
+
+int door(){
+	
+	for(int f = 0; f < 20; f++){
+		stop(fd);	//YBSM Protocol
+	}
+
+	speak(roomsFound);
+	roomsFound++; 
+	printf("number of rooms found: %d\n", roomsFound);
+	
+	
+	double SPACE = 1924;
+	  double THRESHOLD = 50;
+	  scan();
+	  forward(fd);
+	  usleep(500);	//change back if FUCKED
+	  while(1){
+		  	//catch kill signal
+		struct sigaction sigIntHandler;
+	
+		sigIntHandler.sa_handler = my_handler;
+		sigemptyset(&sigIntHandler.sa_mask);
+		sigIntHandler.sa_flags = 0;
+	
+		sigaction(SIGINT, &sigIntHandler, NULL);
+	    //keep moving forward
+	    if(wallDist < (SPACE-THRESHOLD)){
+		if(towards){leftNudge(fd);}
+	    }else if(wallDist > (SPACE+THRESHOLD)){
+		if(away){rightNudge(fd);}
+	    }else{
+		printf("fine: \t");
+		resume(fd);
+	    }
+	    scan();
+		
+		if(d == 0){maintainForward();}
+	    printf("%f\n", wallDist);
+	  }
+	 //needs correction
+	  return 0; 
 }
