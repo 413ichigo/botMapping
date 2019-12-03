@@ -14,11 +14,15 @@
 #define RNPIN 6
 
 
+
+
+
+
 //overhead functions
 int sysInit();  //initialzes all hardware items and loads map from .bMap file
 int move(int act, double arg); //act 0: rotate, act 1: forward, arg:dist/deg
 int scan(); //tells lidar to scan and reads the data into "sweep"
-int mapGen();   //generates map (fuck you reid), generates "field" from "sweep"
+int mapGen();   //generates map, generates "field" from "sweep"
 int localize(); //compares X and Y of current location as well as angle from wall to one in memory
 int findNext(); //finds X and Y positions of the next nearest unvisited destination.
 int pathfind(); //A* or djikstra, generates instruction sets in "action" and "argument"
@@ -27,7 +31,7 @@ int speak(int room);  //the feature of the current square is passed and the appr
 
 // mid level motor control functions
 int maintainForward();
-int door(); 
+int door();
 void rightNudge(int fd); //push right wheel forward a little faster for a second.
 void leftNudge(int fd);  //push  left wheel forward a little faster for a second.
 //low level motor control functions
@@ -41,57 +45,63 @@ void stop(int fd);
 //map functions
 int printMap(struct square[155][400]);
 
+//obstacle avoidance functions
+int obstacle();
 
-double sweep[2][PACKETSIZE]; //up to ten rotations
+
+//movement variables
 int fd;
 int choice;
-int d; 	//door flag
-int field[30][30];    //map generated from mapGen
+int doorFlag; 	//door flag
+//int field[30][30];    //map generated from mapGen
 int X = 104;  //current X position
 int Y = 10;  //current Y position
-int dest; //feature number destination
-double angle; //current angle away from wall.
+//int dest; //feature number destination
+//double angle; //current angle away from wall.
 int nextX;  //destination X
 int nextY;  //destination Y
 double nextAngle;
 double nextDist;
-int action[5];  //list of actions to be sent to move
-double arg[5];  //list of arguments to be sent to move
-double frontDist = 50000;
+//int action[5];  //list of actions to be sent to move
+//double arg[5];  //list of arguments to be sent to move
+
+
+
 
 //map variables
 int squareCount = 0;
 char mapin [MAXPATHLEN] = "mapEdit1.bMap";
 int firstWaypoint = 0;
-double wallDist = 5000;
-double prevWallDist = 0; 
 double wallAng = 0;
 int towards = 0;
-int away = 0; 
-int oneCheck = 0; 
-int roomsFound = 0; 
-char roomNums[10][50] = {"A-211","A-212", "A-209", "A-210", "A-207", "A-208", "A-214", "EV-1","ELEVATOR HALLWAY next"};
-
-
-//char mapout [MAXPATHLEN] = "mapEdit1.bMap";
+int away = 0;
+int oneCheck = 0;
+int roomsFound = 0;
+char roomNums[10][50] = {"A-211","A-212", "A-209", "A-210", "A-207", "A-208", "A-214", "ELEVATOR HALLWAY next"};
 struct square squareList [62000];
 struct square squareGraph[155][400];
 int height = 400;
 int width = 155;
 int features [3][10]; //features are stored with feature num, X, and Y
 int featureNum = 0;
-struct Queue* Xqueue;
-struct Queue* Yqueue;
 
-//lidar variables and stuff
 using namespace std;
 
-string roomAudio[10] = {"play audio/A-211.mp3","play audio/A-212.mp3"
-	, "play audio/A-209.mp3", "play audio/A-210.mp3", "play audio/A-207.mp3"
-	, "play audio/A-208.mp3", "play audio/A-214.mp3", "play audio/EV-1.mp3","play audio/error.mp3"};
+string roomAudio[10] = {"play audio/A-212.mp3","play audio/A-211.mp3"
+	, "play audio/A-209.mp3", "play audio/A-210.mp3", "mpg123 audio/A-207.mp3"
+	, "mpg123 audio/A-208.mp3", "mpg123 audio/A-214.mp3", "mpg123 audio/elevator.mp3"};
 
 
-string errorMessage = "play audio/error.mp3";
+//lidar read variables
+double dataRead[2][491];
+int element = 0;
+int dividend = 152.4;
+int size = 145;
+int bigSize = 290;
+int map [145][145];
+int bigMap[290][290];
+int heuristicMap [290-145][290-145];
+char lidarin [MAXPATHLEN] = "bathroom.csv";
 using namespace rp::standalone::rplidar;
 static inline void delay(_word_size_t ms);
 bool checkRPLIDARHealth(RPlidarDriver * drv);
@@ -108,20 +118,55 @@ rplidar_response_measurement_node_hq_t nodes[8192];//added
 #define _countof(_Array) (int)(sizeof(_Array) / sizeof(_Array[0]))
 #endif
 size_t   count = _countof(nodes);//added
+double sweep[2][PACKETSIZE]; //up to ten rotations
 
-//motor controller variables
 
-//lidar read variables
-double dataRead[2][491];
-int element = 0;
-int dividend = 152.4;
-int size = 145;
-int bigSize = 290;
-int map [145][145];
-int bigMap[290][290];
-int heuristicMap [290-145][290-145];
-char lidarin [MAXPATHLEN] = "bathroom.csv";
 
+//obstacle avoidance variables
+double prevFrontDist = 500000;
+double frontDist = 500000;
+double prevWallDist = 500000; 
+double wallDist = 500000; 
+int obstacleFlag = 0;
+int obstacleDistance = 400;
+int RIGHT = 90; //angle at which the lidar centers its wall measurements
+int WALLANGLEDELTA = 5; //range of angle that the lidar watches the wall
+
+int FRONT = 0; //angle at which the lidar centers its front measurements
+int FRONTANGLEDELTA = 10; //range of angle that the lidar detects obstacles. (decrease if wall interferes)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+////////IMPORTANT STUFF////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD my_handler  //////////////////////////////////////////////////////////////
+// input:
+// output: catches Ctrl + C command and kills the program and lidar
+//
+/////////////////////////////////////////////////////////////////////////////////
 void my_handler(int s){
 	stop(fd);
 	printf("\nCaught signal %d\n",s);
@@ -131,11 +176,19 @@ void my_handler(int s){
     RPlidarDriver::DisposeDriver(drv);
     drv = NULL;
     free(drv);
-    free(Xqueue);
-    free(Yqueue);
 	exit(1);
-	//return;	
+	//return;
 }
+
+//END my_handler///////////////////////////////////////////////////////
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD main  //////////////////////////////////////////////////////////////
+// input:
+// output: error codes if they exist. Will initialize
+//
+/////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char const *argv[]) {
 
 
@@ -143,80 +196,33 @@ int main(int argc, char const *argv[]) {
   printf("initializing hardware..\n");
   signal(SIGINT, ctrlc);
   if(sysInit() == 1){
-    printf("I didnt even fuckin start\n");
+    printf("I didnt even start!!\n");
     goto on_finished;
   }
 
   printf("Hardware initialized successfully!!\n");
-
-  printf("Testing motors..\n");
-  //if((move(1,1) == 1) && (move(1,-1) == 1)){ //move forward and back
-    //printf("I'm a dumb robot and i cant move\n");
-    //return 1;
-  //}
-  printf("Moved successfully!!\n");
-
   printf("Scanning and localizing..\n");
 
   if(scan() == 1){
-    printf("I cant fuckin see!\n");
+    printf("I cant see a thing!\n");
     return 1;
   }
-  //if(mapGen() == 1){
-    //printf("Location not found!\n");
-    //return 1;
-  //}
-
-  //printf("Scanning and localizing complete!! Currently at %d, %d, and I am %f degrees off from parallel\n", X, Y, angle);
-
   maintainForward();
-	//forward(fd);
-  //main loop
-  while(1){
-    printf("Finding next waypoint..\n");
-    if(findNext() == 1){
-      printf("There is not a waypoint in driving distance that I have not visited!!\n");
-      break;
-    }
-    printf("Found one! It is at %d, %d and is room %d\n", nextX, nextY, dest);
-    while((X!=nextX) && (Y != nextY)){
-      pathfind(); //finds nextAngle and nextDist, a fraction of the total distance traveled
-      move(1, nextAngle);
-      move(0, nextDist);
-
-      //position checking
-
-      scan();
-      drv->stop();
-      drv->stopMotor();
-      //mapGen();
-      //localize(); //updates current position if necessary
-      return 1;
-    }
-
-    //speak(dest);
-    //end loop
-    scan();
-    //mapGen();
-    //localize();
-
-    //for when kill signal is found exit nicely and shut stuff down
-    if (ctrl_c_pressed){
-        break;
-    }
-    //return 1;//why is this here??
-  }
-
 
   //for when program ends
   drv->stop();
   drv->stopMotor();
   // done!
-on_finished:
+	on_finished:
   RPlidarDriver::DisposeDriver(drv);
   drv = NULL;
   return 0;
 }
+
+//END main/////////////////////////////////////////////////////////////
+
+
+
 
 /////////////////////////////////////////////////////////////////////////////////
 // METHOD sysInit  //////////////////////////////////////////////////////////////
@@ -225,10 +231,10 @@ on_finished:
 //
 /////////////////////////////////////////////////////////////////////////////////
 int sysInit(){
-	
+
 wiringPiSetup();
 //wiringPiSetupGpio();
-//GPIO INIT 
+//GPIO INIT
 pinMode(0, OUTPUT);
 pinMode(1, OUTPUT);
 pinMode(2, OUTPUT);
@@ -237,7 +243,7 @@ pinMode(4, OUTPUT);
 pinMode(5, OUTPUT);
 pinMode(6, OUTPUT);
 pinMode(7, OUTPUT);
-	
+
 digitalWrite(0, HIGH);
 digitalWrite(1, HIGH);
 digitalWrite(2, HIGH);
@@ -249,7 +255,6 @@ digitalWrite(7, HIGH);
 
 
 
-  //nathan put your lidar initializing shit in here
   if (!drv) {
       fprintf(stderr, "insufficent memory, exit\n");
       exit(-2);
@@ -394,20 +399,6 @@ digitalWrite(7, HIGH);
 
   //printMap(squareGraph);
 
-  if((fd = serialOpen("/dev/ttyS0 ",115200)) < 0){
-		fprintf(stderr, "unable to open serial device: %s\n", strerror(errno));
-		printf("unable to open serial device\n");
-		return 1;
-	}
-	if(wiringPiSetup() == -1){
-		fprintf(stdout, "unable to start wiringPi: %s\n", strerror(errno));
-		printf("unable to start wiringPi\n");
-		return 2;
-	}
-
-	serialPuts(fd, "^rwd 0_");
-	serialPuts(fd, "^rwd 0_");
-	serialPuts(fd, "^rwd 0_");
 	usleep(10000);
 
 	stop(fd);
@@ -416,6 +407,361 @@ digitalWrite(7, HIGH);
 
 
 //////////////////////end sysInit()
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD scan  /////////////////////////////////////////////////////////////////
+// input: integer number of rotations to collect
+// output: error codes if they exist. Reads lidar data into "sweep" variable
+//
+/////////////////////////////////////////////////////////////////////////////////
+int scan(){
+  rplidar_response_measurement_node_hq_t nodes[8192];
+  size_t   count = _countof(nodes);
+	prevWallDist = wallDist;
+	wallDist = 5000000;
+	prevFrontDist = frontDist;
+	frontDist = 5000000;
+  op_result = drv->grabScanDataHq(nodes, count);
+	//usleep(4000000);
+  if (IS_OK(op_result)) {
+      drv->ascendScanData(nodes, count);
+      for (int pos = 0; pos < (int)count ; pos++) {
+        //myfile << nodes[pos].angle_z_q14 * 90.f / (1 << 14) << "," << nodes[pos].dist_mm_q2/4.0f << "\n";
+
+        sweep[0][pos] = nodes[pos].angle_z_q14 * 90.f / (1 << 14);
+        if(nodes[pos].dist_mm_q2/4.0f == 0){
+			sweep[1][pos] = 100000;
+		}
+		else{
+			sweep[1][pos] = nodes[pos].dist_mm_q2/4.0f;
+		}
+	if((sweep[1][pos] < frontDist)&&(sweep[0][pos] < FRONT + FRONTANGLEDELTA)&&(sweep[0][pos] > (FRONT+360) - FRONTANGLEDELTA)){
+        frontDist = sweep[1][pos];
+      }
+	if((sweep[1][pos] < wallDist)&&(sweep[0][pos] < (RIGHT + WALLANGLEDELTA))&&(sweep[0][pos] > (RIGHT - WALLANGLEDELTA))){
+        wallDist = sweep[1][pos];
+        wallAng = sweep[0][pos];
+      }
+        //printf("angle: %03.2f Dist: %8.0f\n", sweep[0][pos], sweep[1][pos]);
+          /*printf("%s theta: %03.2f Dist: %8.0f Q: %d pos: %d\n",
+              (nodes[pos].flag & RPLIDAR_RESP_MEASUREMENT_SYNCBIT) ?"S ":"  ",
+              (nodes[pos].angle_z_q14 * 90.f / (1 << 14)),
+              nodes[pos].dist_mm_q2/4.0f,
+              nodes[pos].quality, pos);*/
+      }
+    }
+    //finds minimum distance of object from lidar. Should be the wall
+	if(((wallDist - prevWallDist) > 500)&&oneCheck != 0){
+		doorFlag = 1;
+	}else if(((wallDist - prevWallDist) < 500)&&oneCheck != 0){
+		doorFlag = 0;
+	}else if((frontDist < obstacleDistance)&&oneCheck != 0){
+		obstacleFlag = 1;
+	}else if((frontDist > obstacleDistance)&&oneCheck != 0){
+		obstacleFlag = 0; 
+	}else{
+		oneCheck = 1;
+		if(prevWallDist < wallDist){
+			away = 1;
+			towards = 0;
+		}else{
+			away = 0;
+			towards = 1;
+		}
+	}
+    //results in wallDist holding the distance from the wall and wallAng holding the angle of that measurement
+
+    return 0;
+}
+
+
+/////////////////////////end scan()
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD speak  //////////////////////////////////////////////////////////////
+// input: room number/feature found
+// output: plays the appropriate audio clip for the given room number
+//
+/////////////////////////////////////////////////////////////////////////////////
+int speak(int room){
+	printf("FOUND ROOM %s\n", roomNums[roomsFound]);
+	//usleep(1000000);
+	//printf("command:\t %s\n",roomAudio[roomsFound].c_str());
+	system(roomAudio[roomsFound].c_str());
+	usleep(1000000);
+
+	return 0;
+}
+
+
+
+
+
+static inline void delay(_word_size_t ms){
+    while (ms>=1000){
+        usleep(1000*1000);
+        ms-=1000;
+    };
+    if (ms!=0)
+        usleep(ms*1000);
+}
+
+bool checkRPLIDARHealth(RPlidarDriver * drv)
+{
+    u_result     op_result;
+    rplidar_response_device_health_t healthinfo;
+
+
+    op_result = drv->getHealth(healthinfo);
+    if (IS_OK(op_result)) { // the macro IS_OK is the preperred way to judge whether the operation is succeed.
+        printf("RPLidar health status : %d\n", healthinfo.status);
+        if (healthinfo.status == RPLIDAR_STATUS_ERROR) {
+            fprintf(stderr, "Error, rplidar internal error detected. Please reboot the device to retry.\n");
+            // enable the following code if you want rplidar to be reboot by software
+            // drv->reset();
+            return false;
+        } else {
+            return true;
+        }
+
+    } else {
+        fprintf(stderr, "Error, cannot retrieve the lidar health code: %x\n", op_result);
+        return false;
+    }
+}
+
+void ctrlc(int)
+{
+    ctrl_c_pressed = true;
+}
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD all movement functions  ///////////////////////////////////////////////
+// input: pointer to serial lines
+// output: sets the appropriate GPIO pin high for each command. Arduino takes over after that. 
+//
+/////////////////////////////////////////////////////////////////////////////////
+
+void forward(int fd){
+
+	digitalWrite(StartPIN, LOW);
+	usleep(1);
+	digitalWrite(StartPIN, HIGH);
+}
+
+void reverse(int fd){
+	digitalWrite(BPIN, LOW);
+	usleep(1);
+	digitalWrite(BPIN, HIGH);
+	
+}
+
+void left(int fd){
+	digitalWrite(LPIN, LOW);
+	usleep(1);
+	digitalWrite(LPIN, HIGH);
+}
+
+void right(int fd){
+	digitalWrite(RPIN, LOW);
+	usleep(1);
+	digitalWrite(RPIN, HIGH);
+}
+
+void stop(int fd){
+	digitalWrite(SPIN, LOW);
+	usleep(1000);
+	digitalWrite(SPIN, HIGH);
+	printf("STOPPED\n");
+}
+
+void resume(int fd){
+	digitalWrite(FPIN, LOW);
+	usleep(1);
+	digitalWrite(FPIN, HIGH);
+}
+
+void leftNudge(int fd){
+	digitalWrite(RNPIN, LOW);
+	usleep(1);
+	digitalWrite(RNPIN, HIGH);
+}
+
+void rightNudge(int fd){
+	digitalWrite(LNPIN, LOW);
+	usleep(1);
+	digitalWrite(LNPIN, HIGH);
+}
+
+
+
+
+int maintainForward(){
+	printf("maintainingForward\n");
+	 
+	struct sigaction sigIntHandler;
+	
+	sigIntHandler.sa_handler = my_handler;
+	sigemptyset(&sigIntHandler.sa_mask);
+	sigIntHandler.sa_flags = 0;
+
+	sigaction(SIGINT, &sigIntHandler, NULL);
+	oneCheck = 0;
+  double SPACE = 800;
+  double THRESHOLD = 50;
+  
+  scan();
+  forward(fd);
+  //usleep(500);	//change back if FUCKED 
+	
+  while(1){
+    //keep moving forward
+    if(wallDist < (SPACE-THRESHOLD)){
+		if(towards){printf("nudgingleft");leftNudge(fd);}
+    }else if(wallDist > (SPACE+THRESHOLD)){
+        if(away){printf("nudgingright: ");rightNudge(fd);}
+    }else{
+		printf("fine: \t");
+		resume(fd);
+    }
+    
+    scan();
+	if(doorFlag == 1){door();}
+	//if(obstacleFlag == 1){obstacle();}
+  	printf("wallDist: %f\t", wallDist);
+  	printf("frontDist: %f\n", frontDist);
+  }
+
+ //needs correction
+  return 0;
+}
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD door  //////////////////////////////////////////////////////////////
+// input: none
+// output: jumped to from maintainForward() 
+//			stops, speaks, and maintains distance from door. 
+//
+/////////////////////////////////////////////////////////////////////////////////
+
+int door(){
+	oneCheck = 0;
+	for(int f = 0; f < 20; f++){
+		stop(fd);	//YBSM Protocol
+	}
+
+	speak(roomsFound);
+	roomsFound++;
+	printf("number of rooms found: %d\n", roomsFound);
+
+
+	double SPACE = 1924;
+	  double THRESHOLD = 50;
+	  scan();
+	  forward(fd);
+	  usleep(500);	//change back if FUCKED
+	  while(1){
+		  	//catch kill signal
+		struct sigaction sigIntHandler;
+
+		sigIntHandler.sa_handler = my_handler;
+		sigemptyset(&sigIntHandler.sa_mask);
+		sigIntHandler.sa_flags = 0;
+
+		sigaction(SIGINT, &sigIntHandler, NULL);
+	    //keep moving forward
+	    if(wallDist < (SPACE-THRESHOLD)){
+		if(towards){leftNudge(fd);}
+	    }else if(wallDist > (SPACE+THRESHOLD)){
+		if(away){rightNudge(fd);}
+	    }else{
+		printf("fine: \t");
+		resume(fd);
+	    }
+	    scan();
+
+		if(doorFlag == 0){maintainForward();}
+	    printf("%f\n", wallDist);
+	  }
+	 //needs correction
+	  return 0;
+}
+
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD obstacle  /////////////////////////////////////////////////////////////
+// input: room number/feature found
+// output: plays the appropriate audio clip for the given room number
+//
+/////////////////////////////////////////////////////////////////////////////////
+
+int obstacle(){
+	printf("found an obstacle");
+		oneCheck = 0;
+	int firstLoop = 0; 
+	//change frontangledelta to 5, minimize risk of detection of things other than wall.
+	FRONTANGLEDELTA = 5;
+	//speak(10); 	//this particular file is the "obstacle detected" audio?
+	usleep(2000000);	//sleep for 20 seconds
+
+	//rotate left 90 deg 
+	left(fd);
+	usleep(2000000); //want to put the obstacle behind on the right side and then rotates to correct
+
+	
+	while(frontDist > obstacleDistance){	//while wall is not detected
+		//while right distance delta is less than 500...
+		while(wallDist - prevWallDist < 800){//move forward until obstacle "dissapears"
+			if(firstLoop==0){firstLoop = 1; break;}
+			scan();
+			forward(fd);
+		}
+		while(wallDist < 800){//rotate until obstacle "reappears"
+			scan();
+			right(fd);
+		}
+	}//repeat until wall is detected again
+	left(fd);
+	usleep(1000000); //intended to be one second, just enough to clear the obstacle
+	while(wallDist-prevWallDist<0){
+		left(fd);
+	}
+	//rotate left like 30 degrees, enough that nudge left will be able to correct before it hits the wall
+
+	obstacleFlag = 0; 
+	maintainForward();
+	return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+
+//Functions after this point not implemented quite yet
+
+
+
+
+
 
 
 
@@ -447,66 +793,69 @@ int move(int act, double arg){
 
 
 
-/////////////////////////////////////////////////////////////////////////////////
-// METHOD scan  /////////////////////////////////////////////////////////////////
-// input: integer number of rotations to collect
-// output: error codes if they exist. Reads lidar data into "sweep" variable
-//
-/////////////////////////////////////////////////////////////////////////////////
-int scan(){
-  rplidar_response_measurement_node_hq_t nodes[8192];
-  size_t   count = _countof(nodes);
-	prevWallDist = wallDist; 
-	wallDist = 5000000;
-	frontDist = 5000000;
-  op_result = drv->grabScanDataHq(nodes, count);
-	//usleep(4000000);
-  if (IS_OK(op_result)) {
-      drv->ascendScanData(nodes, count);
-      for (int pos = 0; pos < (int)count ; pos++) {
-        //myfile << nodes[pos].angle_z_q14 * 90.f / (1 << 14) << "," << nodes[pos].dist_mm_q2/4.0f << "\n";
+int printMap(struct square map [155][400]){
 
-        sweep[0][pos] = nodes[pos].angle_z_q14 * 90.f / (1 << 14);
-        if(nodes[pos].dist_mm_q2/4.0f == 0){
-			sweep[1][pos] = 100000;
-		}
-		else{
-			sweep[1][pos] = nodes[pos].dist_mm_q2/4.0f;
-		}
-	if((sweep[1][pos] < wallDist)&&(sweep[0][pos] < 95)&&(sweep[0][pos] > 85)){
-        wallDist = sweep[1][pos];
-        wallAng = sweep[0][pos];
-      }
-      if((sweep[1][pos] < frontDist)&&((sweep[0][pos] < 5)||(sweep[0][pos] > 355))){
-        frontDist = sweep[1][pos];
-      }
-		
-        //printf("angle: %03.2f Dist: %8.0f\n", sweep[0][pos], sweep[1][pos]);
-          /*printf("%s theta: %03.2f Dist: %8.0f Q: %d pos: %d\n",
-              (nodes[pos].flag & RPLIDAR_RESP_MEASUREMENT_SYNCBIT) ?"S ":"  ",
-              (nodes[pos].angle_z_q14 * 90.f / (1 << 14)),
-              nodes[pos].dist_mm_q2/4.0f,
-              nodes[pos].quality, pos);*/
-      }
-    }
-    //finds minimum distance of object from lidar. Should be the wall
-	if(((wallDist - prevWallDist) > 200)&&oneCheck != 0){d = 1; oneCheck = 0; }else if(((prevWallDist - wallDist) > 200)&&oneCheck != 0){d = 0; oneCheck = 0;}else{
-	oneCheck = 1; 
-		if(prevWallDist < wallDist){
-			away = 1; 
-			towards = 0; 
-		}else{
-			away = 0; 
-			towards = 1; 
-		}
-	}
-    //results in wallDist holding the distance from the wall and wallAng holding the angle of that measurement
+     for(int i = height-1; i >= 0; i--){
+          for(int j = 0; j < width; j++){
+            if(map[j][i].weight != 0){
+              printf(ANSI_COLOR_RED "%d " ANSI_COLOR_RESET, map[j][i].weight);
+            }else if(map[j][i].feature == 100){
+              printf(ANSI_COLOR_GREEN "%d " ANSI_COLOR_RESET, map[j][i].weight);
+            }else if(map[j][i].feature > 100){
+              printf(ANSI_COLOR_CYAN "%d " ANSI_COLOR_RESET, map[j][i].weight);
+            }else{
+              printf("%d ", map[j][i].weight);
+            }
+          }
+          printf("\n");
+     }
 
-    return 0;
+     return 0;
 }
 
 
-/////////////////////////end scan()
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD findNext //////////////////////////////////////////////////////////////
+// input:
+// output: focussed search to find the next nearest unvisited waypoint.
+//
+/////////////////////////////////////////////////////////////////////////////////
+int findNext(){  //finds X and Y positions of the next nearest unvisited destination.
+  if(firstWaypoint == 0){
+    firstWaypoint = 1;
+    return 0;
+  }else{
+    //find next
+    nextY = Y+1;
+    while (squareGraph[X][nextY].feature < 100){
+      nextY = Y+1;
+    }
+  }
+  return 0;
+}
+
+/////////////////////////////end findNext()
+
+
+
+/////////////////////////////////////////////////////////////////////////////////
+// METHOD pathfind  //////////////////////////////////////////////////////////////
+// input:
+// output: sets the nextDist and nextAngle values to the appropriate values for a point
+//          between the current position and the next one
+//
+/////////////////////////////////////////////////////////////////////////////////
+int pathfind(){
+  nextDist = sqrt(((nextX-X)^2) + ((nextY-Y)^2));
+  nextAngle = atan((double)(nextX-X)/(double)(nextY-Y))/0.0174533;
+  printf("vectors set! angle of %f, for a distance of %f", nextAngle, nextDist);
+  return 0;
+}
+
+
+//////////////////////////////end pathfind()
+
 
 
 
@@ -563,303 +912,3 @@ int localize(){
 }
 
 ////////////////////////////end localize()
-
-
-
-/////////////////////////////////////////////////////////////////////////////////
-// METHOD findNext //////////////////////////////////////////////////////////////
-// input:
-// output: focussed search to find the next nearest unvisited waypoint.
-//
-/////////////////////////////////////////////////////////////////////////////////
-int findNext(){  //finds X and Y positions of the next nearest unvisited destination.
-  if(firstWaypoint == 0){
-    firstWaypoint = 1;
-    return 0;
-  }else{
-    //find next
-    nextY = Y+1;
-    while (squareGraph[X][nextY].feature < 100){
-      nextY = Y+1;
-    }
-  }
-  return 0;
-}
-
-/////////////////////////////end findNext()
-
-
-
-/////////////////////////////////////////////////////////////////////////////////
-// METHOD pathfind  //////////////////////////////////////////////////////////////
-// input:
-// output: sets the nextDist and nextAngle values to the appropriate values for a point
-//          between the current position and the next one
-//
-/////////////////////////////////////////////////////////////////////////////////
-int pathfind(){
-  nextDist = sqrt(((nextX-X)^2) + ((nextY-Y)^2));
-  nextAngle = atan((double)(nextX-X)/(double)(nextY-Y))/0.0174533;
-  printf("vectors set! angle of %f, for a distance of %f", nextAngle, nextDist);
-  return 0;
-}
-
-
-//////////////////////////////end pathfind()
-
-
-
-/////////////////////////////////////////////////////////////////////////////////
-// METHOD speak  //////////////////////////////////////////////////////////////
-// input: room number/feature found
-// output: plays the appropriate audio clip for the given room number
-//
-/////////////////////////////////////////////////////////////////////////////////
-int speak(int room){
-	printf("FOUND ROOM %s\n", roomNums[roomsFound]);
-	if(room == 10){
-		stop(fd);
-		system(errorMessage.c_str());
-		usleep(1000000);
-	}else{
-	usleep(1000000);
-	system(roomAudio[roomsFound].c_str());	
-	usleep(1000000);
-	}
-	
-	return 0;
-}
-
-
-
-int printMap(struct square map [155][400]){
-
-     for(int i = height-1; i >= 0; i--){
-          for(int j = 0; j < width; j++){
-            if(map[j][i].weight != 0){
-              printf(ANSI_COLOR_RED "%d " ANSI_COLOR_RESET, map[j][i].weight);
-            }else if(map[j][i].feature == 100){
-              printf(ANSI_COLOR_GREEN "%d " ANSI_COLOR_RESET, map[j][i].weight);
-            }else if(map[j][i].feature > 100){
-              printf(ANSI_COLOR_CYAN "%d " ANSI_COLOR_RESET, map[j][i].weight);
-            }else{
-              printf("%d ", map[j][i].weight);
-            }
-          }
-          printf("\n");
-     }
-
-     return 0;
-}
-
-static inline void delay(_word_size_t ms){
-    while (ms>=1000){
-        usleep(1000*1000);
-        ms-=1000;
-    };
-    if (ms!=0)
-        usleep(ms*1000);
-}
-
-bool checkRPLIDARHealth(RPlidarDriver * drv)
-{
-    u_result     op_result;
-    rplidar_response_device_health_t healthinfo;
-
-
-    op_result = drv->getHealth(healthinfo);
-    if (IS_OK(op_result)) { // the macro IS_OK is the preperred way to judge whether the operation is succeed.
-        printf("RPLidar health status : %d\n", healthinfo.status);
-        if (healthinfo.status == RPLIDAR_STATUS_ERROR) {
-            fprintf(stderr, "Error, rplidar internal error detected. Please reboot the device to retry.\n");
-            // enable the following code if you want rplidar to be reboot by software
-            // drv->reset();
-            return false;
-        } else {
-            return true;
-        }
-
-    } else {
-        fprintf(stderr, "Error, cannot retrieve the lidar health code: %x\n", op_result);
-        return false;
-    }
-}
-
-void ctrlc(int)
-{
-    ctrl_c_pressed = true;
-}
-
-void forward(int fd){
-
-	digitalWrite(StartPIN, LOW);
-	usleep(1);
-	digitalWrite(StartPIN, HIGH);
-	//printf("FORWARD\t");
-	//serialPuts(fd, "!G 1 0_!G 2 600_");
-	//usleep(300000);
-	//serialPuts(fd, "!G 1 540_!G 2 600_");
-	//usleep(10000);
-}
-
-void reverse(int fd){
-	digitalWrite(BPIN, LOW);
-	usleep(1);
-	digitalWrite(BPIN, HIGH);
-	printf("stopping/n");
-	//serialPuts(fd, "!G 1 0_!G 2 -600_");
-	//usleep(300000);
-	//serialPuts(fd, "!G 1 -545_!G 2 -600_");
-	//usleep(10000);
-}
-
-void left(int fd){
-	digitalWrite(LPIN, LOW);
-	usleep(1);
-	digitalWrite(LPIN, HIGH);
-	//serialPuts(fd, "!G 1 -350_!G 2 450_");
-	//usleep(10000);
-}
-
-void right(int fd){
-	digitalWrite(RPIN, LOW);
-	usleep(1);
-	digitalWrite(RPIN, HIGH);
-	//serialPuts(fd, "!G 1 350_!G 2 -450_");
-	//usleep(10000);
-}
-
-void stop(int fd){
-	digitalWrite(SPIN, LOW);
-	usleep(1000);
-	digitalWrite(SPIN, HIGH);
-	//printf("calling stop");
-	//serialPuts(fd, "!G 1 0_!G 2 0_");
-	//usleep(10000);
-}
-
-void resume(int fd){
-	digitalWrite(FPIN, LOW); 
-	usleep(1);
-	digitalWrite(FPIN, HIGH);
-	//serialPuts(fd, "!G 1 540_!G 2 600_");
-	//usleep(10000);
-}
-
-void leftNudge(int fd){
-	digitalWrite(RNPIN, LOW);	
-	usleep(1);
-	digitalWrite(RNPIN, HIGH);
-	//printf("nudged left, theoreticallly\t");
-	//serialPuts(fd, "!G 1 590_!G 2 600_");
-	//usleep(100000);
-	//resume(fd);
-}
-
-void rightNudge(int fd){
-	digitalWrite(LNPIN, LOW);	
-	usleep(1);
-	digitalWrite(LNPIN, HIGH);
-	//printf("nudged right, theoreticallly\t");
-	//serialPuts(fd, "!G 1 540_!G 2 650_");
-	//usleep(100000);
-	//resume(fd);
-}
-
-
-
-
-int maintainForward(){	
-  double SPACE = 800;
-  double THRESHOLD = 50;
-  scan();
-  scan();
-  scan();
-  forward(fd);
-  usleep(500);	//change back if FUCKED
-  while(1){
-	  	//catch kill signal
-	struct sigaction sigIntHandler;
-	
-	sigIntHandler.sa_handler = my_handler;
-	sigemptyset(&sigIntHandler.sa_mask);
-	sigIntHandler.sa_flags = 0;
-	
-	sigaction(SIGINT, &sigIntHandler, NULL);
-    //keep moving forward
-    if(wallDist < (SPACE-THRESHOLD)){
-	if(towards){leftNudge(fd);}
-    }else if(wallDist > (SPACE+THRESHOLD)){
-        if(away){rightNudge(fd);}
-    }else{
-	printf("fine: \t");
-	resume(fd);
-    }
-    scan();
-    if(d == 1){door();}
-    if(frontDist<1104){
-	    while(frontDist<1104){
-				stop(fd);
-				speak(10);
-				scan();
-				printf("%f\n",frontDist);
-			}
-			resume(fd);
-		}
-    printf("%f\n", wallDist);
-  }
- //needs correction
-  return 0;
-}
-
-int door(){
-	
-	for(int f = 0; f < 20; f++){
-		stop(fd);	//YBSM Protocol
-	}
-
-	speak(roomsFound);
-	roomsFound++; 
-	printf("number of rooms found: %d\n", roomsFound);
-	
-	
-	double SPACE = 1924;
-	  double THRESHOLD = 50;
-	  scan();
-	  forward(fd);
-	  usleep(500);	//change back if FUCKED
-	  while(1){
-		  	//catch kill signal
-		struct sigaction sigIntHandler;
-	
-		sigIntHandler.sa_handler = my_handler;
-		sigemptyset(&sigIntHandler.sa_mask);
-		sigIntHandler.sa_flags = 0;
-	
-		sigaction(SIGINT, &sigIntHandler, NULL);
-	    //keep moving forward
-	    if(wallDist < (SPACE-THRESHOLD)){
-		if(towards){leftNudge(fd);}
-	    }else if(wallDist > (SPACE+THRESHOLD)){
-		if(away){rightNudge(fd);}
-	    }else{
-		printf("fine: \t");
-		resume(fd);
-	    }
-	    scan();
-	    if(d == 0){maintainForward();}
-	    if(frontDist<1104){
-	    while(frontDist<1104){
-				stop(fd);
-				speak(10);
-				scan();
-				printf("%f\n",frontDist);
-			}
-			resume(fd);
-		}
-		scan();
-	    printf("%f\n", wallDist);
-	  }
-	 //needs correction
-	  return 0; 
-}
